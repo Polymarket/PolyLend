@@ -4,3 +4,6 @@
 [submodule "lib/conditional-tokens-contracts"]
 	path = lib/conditional-tokens-contracts
 	url = https://github.com/gnosis/conditional-tokens-contracts
+[submodule "lib/solady"]
+	path = lib/solady
+	url = https://github.com/Vectorized/solady
