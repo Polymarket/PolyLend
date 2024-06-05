@@ -5,7 +5,32 @@ import {IConditionalTokens} from "./interfaces/IConditionalTokens.sol";
 import {ERC20} from "../lib/solady/src/tokens/ERC20.sol";
 import {InterestLib} from "./InterestLib.sol";
 
-contract PolyLend {
+interface PolyLendEE {
+    event LoanRequested(uint256 id, address borrower, uint256 positionId, uint256 collateralAmount);
+    event LoanOffered(uint256 id, address lender, uint256 loanAmount, uint256 rate);
+    event LoanAccepted(uint256 id, uint256 startTime);
+    event LoanCalled(uint256 id, uint256 callTime);
+    event LoanRepayed(uint256 id);
+    event LoanTransferred(uint256 oldId, uint256 newId, address newLender, uint256 newRate);
+
+    error CollateralAmountIsZero();
+    error InsufficientCollateralBalance();
+    error CollateralIsNotApproved();
+    error OnlyBorrower();
+    error OnlyLender();
+    error InvalidRequest();
+    error InvalidOffer();
+    error InvalidLoan();
+    error InsufficientFunds();
+    error InsufficientAllowance();
+    error InvalidRate();
+    error InvalidPaybackTime();
+    error LoanIsNotCalled();
+    error AuctionHasEnded();
+}
+
+/// @title PolyLend
+contract PolyLend is PolyLendEE {
     using InterestLib for uint256;
 
     // need to calculate a reasonable max interest rate
@@ -35,13 +60,6 @@ contract PolyLend {
         uint256 rate;
     }
 
-    event LoanRequested(uint256 id, address borrower, uint256 positionId, uint256 collateralAmount);
-    event LoanOffered(uint256 id, address lender, uint256 loanAmount, uint256 rate);
-    event LoanAccepted(uint256 id, uint256 startTime);
-    event LoanCalled(uint256 id, uint256 callTime);
-    event LoanRepayed(uint256 id);
-    event LoanTransferred(uint256 oldId, uint256 newId, address newLender, uint256 newRate);
-
     IConditionalTokens public immutable conditionalTokens;
     ERC20 public immutable usdc;
 
@@ -61,10 +79,19 @@ contract PolyLend {
         usdc = ERC20(_usdc);
     }
 
+    /// @notice Submit a request for loan offers
     function request(uint256 _positionId, uint256 _collateralAmount) public {
-        require(_collateralAmount > 0, "Collateral amount must be greater than 0");
-        require(conditionalTokens.balanceOf(msg.sender, _positionId) >= _collateralAmount, "Insufficient collateral");
-        require(conditionalTokens.isApprovedForAll(msg.sender, address(this)));
+        if (_collateralAmount == 0) {
+            revert CollateralAmountIsZero();
+        }
+
+        if (conditionalTokens.balanceOf(msg.sender, _positionId) < _collateralAmount) {
+            revert InsufficientCollateralBalance();
+        }
+
+        if (!conditionalTokens.isApprovedForAll(msg.sender, address(this))) {
+            revert CollateralIsNotApproved();
+        }
 
         uint256 requestId = nextRequestId;
         nextRequestId += 1;
@@ -73,16 +100,32 @@ contract PolyLend {
         emit LoanRequested(requestId, msg.sender, _positionId, _collateralAmount);
     }
 
+    /// @notice Cancel a loan request
     function cancelRequest(uint256 _requestId) public {
-        require(requests[_requestId].borrower == msg.sender, "Only borrower can cancel request");
+        if (requests[_requestId].borrower != msg.sender) {
+            revert OnlyBorrower();
+        }
+
         requests[_requestId].borrower = address(0);
     }
 
+    /// @notice Submit a loan offer for a request
     function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate) public {
-        require(requests[_requestId].borrower != address(0), "Request does not exist");
-        require(usdc.balanceOf(msg.sender) >= _loanAmount, "Insufficient funds");
-        require(usdc.allowance(msg.sender, address(this)) >= _loanAmount, "Insufficient allowance");
-        require(_rate > InterestLib.ONE, "Rate must be greater than 1");
+        if (requests[_requestId].borrower == address(0)) {
+            revert InvalidRequest();
+        }
+
+        if (usdc.balanceOf(msg.sender) < _loanAmount) {
+            revert InsufficientFunds();
+        }
+
+        if (usdc.allowance(msg.sender, address(this)) < _loanAmount) {
+            revert InsufficientAllowance();
+        }
+
+        if (_rate <= InterestLib.ONE || _rate > MAX_INTEREST) {
+            revert InvalidRate();
+        }
 
         uint256 offerId = nextOfferId;
         nextOfferId += 1;
@@ -92,14 +135,24 @@ contract PolyLend {
         emit LoanOffered(_requestId, msg.sender, _loanAmount, _rate);
     }
 
+    /// @notice Cancel a loan offer
     function cancelOffer(uint256 _id) public {
-        require(offers[_id].lender == msg.sender, "Only lender can cancel offer");
+        if (offers[_id].lender != msg.sender) {
+            revert OnlyLender();
+        }
+
         offers[_id].lender = address(0);
     }
 
+    /// @notice Accept a loan offer
     function acceptLoan(uint256 _requestId, uint256 _offerId) public {
-        require(requests[_requestId].borrower == msg.sender, "Only borrower can accept loan");
-        require(offers[_offerId].lender != address(0), "Loan offer does not exist");
+        if (requests[_requestId].borrower != msg.sender) {
+            revert OnlyBorrower();
+        }
+
+        if (offers[_offerId].lender == address(0)) {
+            revert InvalidOffer();
+        }
 
         uint256 loanId = nextLoanId;
         nextLoanId += 1;
@@ -116,33 +169,48 @@ contract PolyLend {
             callTime: 0
         });
 
+        // invalidate the request
         requests[_requestId].borrower = address(0);
+
+        // invalidate the offer
         offers[_requestId].lender = address(0);
 
         // transfer the borrowers collateral to address(this)
         conditionalTokens.safeTransferFrom(
             msg.sender, address(this), loans[_requestId].positionId, loans[_requestId].collateralAmount, ""
         );
+
         // transfer usdc from the lender to the borrower
         usdc.transferFrom(loans[_requestId].lender, msg.sender, loans[_requestId].loanAmount);
 
         emit LoanAccepted(_requestId, block.timestamp);
     }
 
+    /// @notice Call a loan
     function callLoan(uint256 _loanId) public {
-        require(loans[_loanId].lender == msg.sender, "Only lender can call loan");
+        if (loans[_loanId].lender != msg.sender) {
+            revert OnlyLender();
+        }
+
         loans[_loanId].callTime = block.timestamp;
 
         emit LoanCalled(_loanId, block.timestamp);
     }
 
+    /// @notice Repay a loan
     function paybackLoan(uint256 _loanId, uint256 _paybackTime) public {
-        require(loans[_loanId].borrower == msg.sender, "Only borrower can payback loan");
+        if (loans[_loanId].borrower != msg.sender) {
+            revert OnlyBorrower();
+        }
 
         if (loans[_loanId].callTime != 0) {
-            require(loans[_loanId].callTime == _paybackTime, "Payback time does not equal call time");
+            if (loans[_loanId].callTime != _paybackTime) {
+                revert InvalidPaybackTime();
+            }
         } else {
-            require(_paybackTime + paybackBuffer > block.timestamp, "Payback time is too early");
+            if (_paybackTime + paybackBuffer < block.timestamp) {
+                revert InvalidPaybackTime();
+            }
         }
 
         // compute accrued interest
@@ -162,20 +230,31 @@ contract PolyLend {
         emit LoanRepayed(_loanId);
     }
 
+    /// @notice Transfer a called loan to a new lender
     function transferLoan(uint256 _loanId, uint256 _newRate) public {
-        require(loans[_loanId].lender == msg.sender, "Only lender can takeover loan");
-        require(loans[_loanId].callTime != 0, "Loan is not called");
-        require(block.timestamp < loans[_loanId].callTime + auctionDuration, "Auction has ended");
+        if (loans[_loanId].borrower == address(0)) {
+            revert InvalidLoan();
+        }
+
+        if (loans[_loanId].callTime == 0) {
+            revert LoanIsNotCalled();
+        }
+
+        if (block.timestamp > loans[_loanId].callTime + auctionDuration) {
+            revert AuctionHasEnded();
+        }
 
         uint256 currentInterestRate = (block.timestamp - loans[_loanId].callTime) * MAX_INTEREST / auctionDuration;
-        require(_newRate <= currentInterestRate, "New rate must be less than current offered rate");
 
+        // _newRate must be less than or equal to the current offered rate
+        if (_newRate > currentInterestRate) {
+            revert InvalidRate();
+        }
+
+        // calculate amount owed on the loan as of callTime
         uint256 amountOwed = _calculateAmountOwed(
             loans[_loanId].loanAmount, loans[_loanId].rate, loans[_loanId].callTime - loans[_loanId].startTime
         );
-
-        // transfer usdc from the new lender to the old lender
-        usdc.transferFrom(msg.sender, loans[_loanId].lender, amountOwed);
 
         uint256 loanId = nextLoanId;
         nextLoanId += 1;
@@ -196,6 +275,9 @@ contract PolyLend {
 
         // cancel the old loan
         loans[_loanId].borrower = address(0);
+
+        // transfer usdc from the new lender to the old lender
+        usdc.transferFrom(msg.sender, loans[_loanId].lender, amountOwed);
 
         emit LoanTransferred(_loanId, loanId, msg.sender, _newRate);
     }
