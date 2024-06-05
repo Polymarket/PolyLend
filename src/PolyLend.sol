@@ -26,6 +26,7 @@ interface PolyLendEE {
     error InvalidRate();
     error InvalidPaybackTime();
     error LoanIsNotCalled();
+    error LoanIsCalled();
     error AuctionHasEnded();
 }
 
@@ -190,6 +191,10 @@ contract PolyLend is PolyLendEE {
     function callLoan(uint256 _loanId) public {
         if (loans[_loanId].lender != msg.sender) {
             revert OnlyLender();
+        }
+
+        if (loans[_loanId].callTime != 0) {
+            revert LoanIsCalled();
         }
 
         loans[_loanId].callTime = block.timestamp;
