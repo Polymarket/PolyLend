@@ -117,7 +117,10 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Submit a loan offer for a request
-    function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate, uint256 _minimumDuration) public {
+    function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate, uint256 _minimumDuration)
+        public
+        returns (uint256)
+    {
         if (requests[_requestId].borrower == address(0)) {
             revert InvalidRequest();
         }
@@ -140,6 +143,8 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         offers[offerId] = Offer(_requestId, msg.sender, _loanAmount, _rate, _minimumDuration);
 
         emit LoanOffered(_requestId, msg.sender, _loanAmount, _rate, _minimumDuration);
+
+        return offerId;
     }
 
     /// @notice Cancel a loan offer
@@ -152,7 +157,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Accept a loan offer
-    function acceptLoan(uint256 _requestId, uint256 _offerId) public {
+    function accept(uint256 _requestId, uint256 _offerId) public returns (uint256) {
         if (requests[_requestId].borrower != msg.sender) {
             revert OnlyBorrower();
         }
@@ -192,10 +197,12 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         usdc.transferFrom(loans[_requestId].lender, msg.sender, loans[_requestId].loanAmount);
 
         emit LoanAccepted(_requestId, block.timestamp);
+
+        return loanId;
     }
 
     /// @notice Call a loan
-    function callLoan(uint256 _loanId) public {
+    function call(uint256 _loanId) public {
         if (loans[_loanId].lender != msg.sender) {
             revert OnlyLender();
         }
@@ -214,7 +221,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Repay a loan
-    function paybackLoan(uint256 _loanId, uint256 _paybackTime) public {
+    function payback(uint256 _loanId, uint256 _paybackTime) public {
         if (loans[_loanId].borrower != msg.sender) {
             revert OnlyBorrower();
         }
@@ -247,7 +254,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Transfer a called loan to a new lender
-    function transferLoan(uint256 _loanId, uint256 _newRate) public {
+    function transfer(uint256 _loanId, uint256 _newRate) public {
         if (loans[_loanId].borrower == address(0)) {
             revert InvalidLoan();
         }
