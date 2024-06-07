@@ -20,8 +20,8 @@ contract USDC is ERC20 {
         return 6;
     }
 
-    function mint(address to, uint256 amount) public {
-        _mint(to, amount);
+    function mint(address _to, uint256 _amount) public {
+        _mint(_to, _amount);
     }
 }
 
@@ -33,6 +33,7 @@ contract PolyLendTest is Test, PolyLendEE {
     address oracle;
     address borrower;
     address splitter;
+    address lender;
 
     bytes32 questionId = keccak256("BIDEN TRUMP 2024");
     bytes32 conditionId;
@@ -47,6 +48,7 @@ contract PolyLendTest is Test, PolyLendEE {
         oracle = vm.createWallet("oracle").addr;
         borrower = vm.createWallet("borrower").addr;
         splitter = vm.createWallet("splitter").addr;
+        lender = vm.createWallet("lender").addr;
 
         conditionalTokens.prepareCondition(oracle, questionId, 2);
         conditionId = conditionalTokens.getConditionId(oracle, questionId, 2);
@@ -92,7 +94,7 @@ contract PolyLendTest is Test, PolyLendEE {
         polyLend.request(positionId0, 100_000_000);
     }
 
-    function test_PolyLend_request(uint256 _amount) public {
+    function test_PolyLend_request(uint128 _amount) public {
         vm.assume(_amount > 0);
         _mintConditionalTokens(borrower, _amount, positionId0);
 
@@ -108,5 +110,36 @@ contract PolyLendTest is Test, PolyLendEE {
         assertEq(borrower_, borrower);
         assertEq(positionId_, positionId0);
         assertEq(collateralAmount_, _amount);
+    }
+
+    function test_PolyLend_offer(uint128 _amount, uint128 _loanAmount, uint256 _rate) public {
+        vm.assume(_amount > 0);
+        vm.assume(_rate > 10 ** 18);
+        vm.assume(_rate <= polyLend.MAX_INTEREST());
+
+        _mintConditionalTokens(borrower, _amount, positionId0);
+        usdc.mint(lender, _loanAmount);
+
+        vm.startPrank(borrower);
+        conditionalTokens.setApprovalForAll(address(polyLend), true);
+
+        uint256 requestId = polyLend.request(positionId0, _amount);
+        vm.stopPrank();
+
+        vm.startPrank(lender);
+        usdc.approve(address(polyLend), _loanAmount);
+
+        vm.expectEmit();
+        emit LoanOffered(requestId, lender, _loanAmount, _rate);
+
+        polyLend.offer(requestId, _loanAmount, _rate);
+
+        vm.stopPrank();
+
+        (uint256 requestId_, address lender_, uint256 loanAmount_, uint256 rate_) = polyLend.offers(0);
+        assertEq(requestId_, requestId);
+        assertEq(lender_, lender);
+        assertEq(loanAmount_, _loanAmount);
+        assertEq(rate_, _rate);
     }
 }
