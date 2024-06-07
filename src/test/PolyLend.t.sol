@@ -3,27 +3,9 @@ pragma solidity ^0.8.15;
 
 import {Test, console2 as console, stdStorage, StdStorage, stdError} from "../../lib/forge-std/src/Test.sol";
 import {PolyLend, PolyLendEE, Loan, Request, Offer} from "../PolyLend.sol";
-import {ERC20} from "../../lib/solady/src/tokens/ERC20.sol";
+import {USDC} from "../dev/USDC.sol";
 import {DeployLib} from "../dev/DeployLib.sol";
 import {IConditionalTokens} from "../interfaces/IConditionalTokens.sol";
-
-contract USDC is ERC20 {
-    function name() public pure override returns (string memory) {
-        return "USDC";
-    }
-
-    function symbol() public pure override returns (string memory) {
-        return "USDC";
-    }
-
-    function decimals() public pure override returns (uint8) {
-        return 6;
-    }
-
-    function mint(address _to, uint256 _amount) public {
-        _mint(_to, _amount);
-    }
-}
 
 contract PolyLendTest is Test, PolyLendEE {
     USDC usdc;
