@@ -112,10 +112,13 @@ contract PolyLendTest is Test, PolyLendEE {
         assertEq(collateralAmount_, _amount);
     }
 
-    function test_PolyLend_offer(uint128 _amount, uint128 _loanAmount, uint256 _rate) public {
+    function test_PolyLend_offer(uint128 _amount, uint128 _loanAmount, uint256 _rate, uint256 _minimumDuration)
+        public
+    {
         vm.assume(_amount > 0);
         vm.assume(_rate > 10 ** 18);
         vm.assume(_rate <= polyLend.MAX_INTEREST());
+        vm.assume(_minimumDuration <= 60 days);
 
         _mintConditionalTokens(borrower, _amount, positionId0);
         usdc.mint(lender, _loanAmount);
@@ -130,16 +133,18 @@ contract PolyLendTest is Test, PolyLendEE {
         usdc.approve(address(polyLend), _loanAmount);
 
         vm.expectEmit();
-        emit LoanOffered(requestId, lender, _loanAmount, _rate);
+        emit LoanOffered(requestId, lender, _loanAmount, _rate, _minimumDuration);
 
-        polyLend.offer(requestId, _loanAmount, _rate);
+        polyLend.offer(requestId, _loanAmount, _rate, _minimumDuration);
 
         vm.stopPrank();
 
-        (uint256 requestId_, address lender_, uint256 loanAmount_, uint256 rate_) = polyLend.offers(0);
+        (uint256 requestId_, address lender_, uint256 loanAmount_, uint256 rate_, uint256 minimumDuration_) =
+            polyLend.offers(0);
         assertEq(requestId_, requestId);
         assertEq(lender_, lender);
         assertEq(loanAmount_, _loanAmount);
         assertEq(rate_, _rate);
+        assertEq(minimumDuration_, _minimumDuration);
     }
 }
