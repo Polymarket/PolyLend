@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.26;
 
-import {IConditionalTokens} from "./interfaces/IConditionalTokens.sol";
 import {ERC20} from "../lib/solady/src/tokens/ERC20.sol";
+import {IConditionalTokens} from "./interfaces/IConditionalTokens.sol";
+import {ERC1155TokenReceiver} from "./ERC1155TokenReceiver.sol";
 import {InterestLib} from "./InterestLib.sol";
 
 struct Loan {
@@ -58,7 +59,7 @@ interface PolyLendEE {
 }
 
 /// @title PolyLend
-contract PolyLend is PolyLendEE {
+contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     using InterestLib for uint256;
 
     // need to calculate a reasonable max interest rate
