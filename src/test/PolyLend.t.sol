@@ -98,6 +98,9 @@ contract PolyLendTest is Test, PolyLendEE {
 
         vm.startPrank(borrower);
         conditionalTokens.setApprovalForAll(address(polyLend), true);
+
+        vm.expectEmit();
+        emit LoanRequested(0, borrower, positionId0, _amount);
         uint256 requestId = polyLend.request(positionId0, _amount);
         vm.stopPrank();
 
