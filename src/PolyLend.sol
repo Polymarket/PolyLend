@@ -13,6 +13,7 @@ struct Loan {
     uint256 loanAmount;
     uint256 rate;
     uint256 startTime;
+    uint256 minimumDuration;
     uint256 callTime;
 }
 
@@ -27,11 +28,12 @@ struct Offer {
     address lender;
     uint256 loanAmount;
     uint256 rate;
+    uint256 minimumDuration;
 }
 
 interface PolyLendEE {
     event LoanRequested(uint256 id, address borrower, uint256 positionId, uint256 collateralAmount);
-    event LoanOffered(uint256 id, address lender, uint256 loanAmount, uint256 rate);
+    event LoanOffered(uint256 id, address lender, uint256 loanAmount, uint256 rate, uint256 minimumDuration);
     event LoanAccepted(uint256 id, uint256 startTime);
     event LoanCalled(uint256 id, uint256 callTime);
     event LoanRepayed(uint256 id);
@@ -51,6 +53,7 @@ interface PolyLendEE {
     error InvalidPaybackTime();
     error LoanIsNotCalled();
     error LoanIsCalled();
+    error MinimumDurationHasNotPassed();
     error AuctionHasEnded();
 }
 
@@ -113,7 +116,7 @@ contract PolyLend is PolyLendEE {
     }
 
     /// @notice Submit a loan offer for a request
-    function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate) public {
+    function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate, uint256 _minimumDuration) public {
         if (requests[_requestId].borrower == address(0)) {
             revert InvalidRequest();
         }
@@ -133,9 +136,9 @@ contract PolyLend is PolyLendEE {
         uint256 offerId = nextOfferId;
         nextOfferId += 1;
 
-        offers[offerId] = Offer(_requestId, msg.sender, _loanAmount, _rate);
+        offers[offerId] = Offer(_requestId, msg.sender, _loanAmount, _rate, _minimumDuration);
 
-        emit LoanOffered(_requestId, msg.sender, _loanAmount, _rate);
+        emit LoanOffered(_requestId, msg.sender, _loanAmount, _rate, _minimumDuration);
     }
 
     /// @notice Cancel a loan offer
@@ -169,6 +172,7 @@ contract PolyLend is PolyLendEE {
             loanAmount: offers[_offerId].loanAmount,
             rate: offers[_offerId].rate,
             startTime: block.timestamp,
+            minimumDuration: offers[_offerId].minimumDuration,
             callTime: 0
         });
 
@@ -193,6 +197,10 @@ contract PolyLend is PolyLendEE {
     function callLoan(uint256 _loanId) public {
         if (loans[_loanId].lender != msg.sender) {
             revert OnlyLender();
+        }
+
+        if (block.timestamp < loans[_loanId].startTime + loans[_loanId].minimumDuration) {
+            revert MinimumDurationHasNotPassed();
         }
 
         if (loans[_loanId].callTime != 0) {
@@ -277,6 +285,7 @@ contract PolyLend is PolyLendEE {
             loanAmount: amountOwed,
             rate: _newRate,
             startTime: block.timestamp,
+            minimumDuration: 0,
             callTime: 0
         });
 
