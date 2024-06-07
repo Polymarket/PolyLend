@@ -5,6 +5,30 @@ import {IConditionalTokens} from "./interfaces/IConditionalTokens.sol";
 import {ERC20} from "../lib/solady/src/tokens/ERC20.sol";
 import {InterestLib} from "./InterestLib.sol";
 
+struct Loan {
+    address borrower;
+    address lender;
+    uint256 positionId;
+    uint256 collateralAmount;
+    uint256 loanAmount;
+    uint256 rate;
+    uint256 startTime;
+    uint256 callTime;
+}
+
+struct Request {
+    address borrower;
+    uint256 positionId;
+    uint256 collateralAmount;
+}
+
+struct Offer {
+    uint256 requestId;
+    address lender;
+    uint256 loanAmount;
+    uint256 rate;
+}
+
 interface PolyLendEE {
     event LoanRequested(uint256 id, address borrower, uint256 positionId, uint256 collateralAmount);
     event LoanOffered(uint256 id, address lender, uint256 loanAmount, uint256 rate);
@@ -37,30 +61,6 @@ contract PolyLend is PolyLendEE {
     // need to calculate a reasonable max interest rate
     uint256 public constant MAX_INTEREST = 1_000_000 * InterestLib.ONE;
 
-    struct Loan {
-        address borrower;
-        address lender;
-        uint256 positionId;
-        uint256 collateralAmount;
-        uint256 loanAmount;
-        uint256 rate;
-        uint256 startTime;
-        uint256 callTime;
-    }
-
-    struct Request {
-        address borrower;
-        uint256 positionId;
-        uint256 collateralAmount;
-    }
-
-    struct Offer {
-        uint256 requestId;
-        address lender;
-        uint256 loanAmount;
-        uint256 rate;
-    }
-
     IConditionalTokens public immutable conditionalTokens;
     ERC20 public immutable usdc;
 
@@ -81,7 +81,7 @@ contract PolyLend is PolyLendEE {
     }
 
     /// @notice Submit a request for loan offers
-    function request(uint256 _positionId, uint256 _collateralAmount) public {
+    function request(uint256 _positionId, uint256 _collateralAmount) public returns (uint256) {
         if (_collateralAmount == 0) {
             revert CollateralAmountIsZero();
         }
@@ -99,6 +99,8 @@ contract PolyLend is PolyLendEE {
 
         requests[requestId] = Request(msg.sender, _positionId, _collateralAmount);
         emit LoanRequested(requestId, msg.sender, _positionId, _collateralAmount);
+
+        return requestId;
     }
 
     /// @notice Cancel a loan request
