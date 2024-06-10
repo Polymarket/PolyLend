@@ -4,14 +4,14 @@ pragma solidity ^0.8.15;
 import {PolyLendTestHelper, Loan} from "./PolyLendTestHelper.sol";
 
 contract PolyLendCallTest is PolyLendTestHelper {
-    function _setUp(uint128 _collateralAmount, uint128 _loanAmount, uint256 _rate, uint256 _minimumDuration)
-        internal
-        returns (uint256)
-    {
+    uint256 loanId;
+    uint256 rate;
+
+    function _setUp(uint128 _collateralAmount, uint128 _loanAmount, uint256 _rate, uint256 _minimumDuration) internal {
         vm.assume(_collateralAmount > 0);
-        vm.assume(_rate > 10 ** 18);
-        vm.assume(_rate <= polyLend.MAX_INTEREST());
         vm.assume(_minimumDuration <= 60 days);
+
+        rate = bound(_rate, 10 ** 18 + 1, polyLend.MAX_INTEREST());
 
         _mintConditionalTokens(borrower, _collateralAmount, positionId0);
         usdc.mint(lender, _loanAmount);
@@ -23,16 +23,14 @@ contract PolyLendCallTest is PolyLendTestHelper {
 
         vm.startPrank(lender);
         usdc.approve(address(polyLend), _loanAmount);
-        uint256 offerId = polyLend.offer(requestId, _loanAmount, _rate, _minimumDuration);
+        uint256 offerId = polyLend.offer(requestId, _loanAmount, rate, _minimumDuration);
         vm.stopPrank();
 
         vm.startPrank(borrower);
         vm.expectEmit();
         emit LoanAccepted(requestId, block.timestamp);
-        uint256 loanId = polyLend.accept(requestId, offerId);
+        loanId = polyLend.accept(requestId, offerId);
         vm.stopPrank();
-
-        return loanId;
     }
 
     function test_PolyLend_call(
@@ -42,7 +40,7 @@ contract PolyLendCallTest is PolyLendTestHelper {
         uint256 _minimumDuration,
         uint256 _duration
     ) public {
-        uint256 loanId = _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
         uint256 duration = bound(_duration, _minimumDuration, type(uint128).max);
 
         uint256 callTime = block.timestamp + duration;
@@ -61,7 +59,7 @@ contract PolyLendCallTest is PolyLendTestHelper {
         assertEq(loan.positionId, positionId0);
         assertEq(loan.collateralAmount, _collateralAmount);
         assertEq(loan.loanAmount, _loanAmount);
-        assertEq(loan.rate, _rate);
+        assertEq(loan.rate, rate);
         assertEq(loan.startTime, 1);
         assertEq(loan.minimumDuration, _minimumDuration);
         assertEq(loan.callTime, block.timestamp);
@@ -74,7 +72,7 @@ contract PolyLendCallTest is PolyLendTestHelper {
         uint256 _minimumDuration,
         address _caller
     ) public {
-        uint256 loanId = _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
         vm.assume(_caller != lender);
 
         vm.startPrank(_caller);
@@ -93,7 +91,7 @@ contract PolyLendCallTest is PolyLendTestHelper {
         vm.assume(_minimumDuration > 0);
         uint256 duration = bound(_duration, 0, _minimumDuration - 1);
 
-        uint256 loanId = _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
 
         vm.warp(block.timestamp + duration);
 
@@ -109,7 +107,7 @@ contract PolyLendCallTest is PolyLendTestHelper {
         uint256 _rate,
         uint256 _minimumDuration
     ) public {
-        uint256 loanId = _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
 
         vm.warp(block.timestamp + _minimumDuration);
 
