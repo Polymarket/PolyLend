@@ -5,6 +5,7 @@ import {PolyLendTestHelper, Loan} from "./PolyLendTestHelper.sol";
 
 contract PolyLendTransferTest is PolyLendTestHelper {
     address newLender;
+    uint256 rate;
 
     function setUp() public override {
         super.setUp();
@@ -22,6 +23,8 @@ contract PolyLendTransferTest is PolyLendTestHelper {
 
         vm.assume(_collateralAmount > 0);
 
+        rate = bound(_rate, 10 ** 18 + 1, polyLend.MAX_INTEREST());
+
         _mintConditionalTokens(borrower, _collateralAmount, positionId0);
         usdc.mint(lender, _loanAmount);
 
@@ -32,7 +35,7 @@ contract PolyLendTransferTest is PolyLendTestHelper {
 
         vm.startPrank(lender);
         usdc.approve(address(polyLend), _loanAmount);
-        uint256 offerId = polyLend.offer(requestId, _loanAmount, _rate, _minimumDuration);
+        uint256 offerId = polyLend.offer(requestId, _loanAmount, rate, _minimumDuration);
         vm.stopPrank();
 
         vm.startPrank(borrower);
@@ -64,12 +67,11 @@ contract PolyLendTransferTest is PolyLendTestHelper {
 
         uint256 loanId;
         uint256 callTime;
-        uint256 rate = bound(_rate, 10 ** 18 + 1, polyLend.MAX_INTEREST());
 
         {
             uint256 duration = bound(_duration, _minimumDuration, 60 days);
             uint256 auctionLength = bound(_auctionLength, 0, polyLend.auctionDuration());
-            loanId = _setUp(_collateralAmount, _loanAmount, rate, _minimumDuration, duration);
+            loanId = _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration, duration);
 
             callTime = block.timestamp;
             vm.warp(block.timestamp + auctionLength);

@@ -4,13 +4,15 @@ pragma solidity ^0.8.15;
 import {PolyLendTestHelper, Offer} from "./PolyLendTestHelper.sol";
 
 contract PolyLendOfferTest is PolyLendTestHelper {
+    uint256 rate;
+
     function test_PolyLend_offer(uint128 _amount, uint128 _loanAmount, uint256 _rate, uint256 _minimumDuration)
         public
     {
         vm.assume(_amount > 0);
-        vm.assume(_rate > 10 ** 18);
-        vm.assume(_rate <= polyLend.MAX_INTEREST());
         vm.assume(_minimumDuration <= 60 days);
+
+        rate = bound(_rate, 10 ** 18 + 1, polyLend.MAX_INTEREST());
 
         _mintConditionalTokens(borrower, _amount, positionId0);
         usdc.mint(lender, _loanAmount);
@@ -25,9 +27,9 @@ contract PolyLendOfferTest is PolyLendTestHelper {
         usdc.approve(address(polyLend), _loanAmount);
 
         vm.expectEmit();
-        emit LoanOffered(requestId, lender, _loanAmount, _rate, _minimumDuration);
+        emit LoanOffered(requestId, lender, _loanAmount, rate, _minimumDuration);
 
-        polyLend.offer(requestId, _loanAmount, _rate, _minimumDuration);
+        polyLend.offer(requestId, _loanAmount, rate, _minimumDuration);
 
         vm.stopPrank();
 
@@ -36,7 +38,7 @@ contract PolyLendOfferTest is PolyLendTestHelper {
         assertEq(offer.requestId, requestId);
         assertEq(offer.lender, lender);
         assertEq(offer.loanAmount, _loanAmount);
-        assertEq(offer.rate, _rate);
+        assertEq(offer.rate, rate);
         assertEq(offer.minimumDuration, _minimumDuration);
     }
 }
