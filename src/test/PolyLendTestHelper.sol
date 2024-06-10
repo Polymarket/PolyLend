@@ -22,7 +22,7 @@ contract PolyLendTestHelper is Test, PolyLendEE {
     uint256 positionId0;
     uint256 positionId1;
 
-    function setUp() public {
+    function setUp() public virtual {
         usdc = new USDC();
         conditionalTokens = IConditionalTokens(DeployLib.deployConditionalTokens());
         polyLend = new PolyLend(address(conditionalTokens), address(usdc));
@@ -99,5 +99,9 @@ contract PolyLendTestHelper is Test, PolyLendEE {
             minimumDuration: minimumDuration_,
             callTime: callTime_
         });
+    }
+
+    function _getNewRate(uint256 _callTime) internal view returns (uint256) {
+        return (block.timestamp - _callTime) * polyLend.MAX_INTEREST() / polyLend.auctionDuration();
     }
 }
