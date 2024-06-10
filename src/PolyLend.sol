@@ -63,7 +63,8 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     using InterestLib for uint256;
 
     // need to calculate a reasonable max interest rate
-    uint256 public constant MAX_INTEREST = 1_000_000 * InterestLib.ONE;
+    // this is a per second interest rate
+    uint256 public constant MAX_INTEREST = InterestLib.ONE + 2 * 10 ** 11;
 
     IConditionalTokens public immutable conditionalTokens;
     ERC20 public immutable usdc;
@@ -82,6 +83,11 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     constructor(address _conditionalTokens, address _usdc) {
         conditionalTokens = IConditionalTokens(_conditionalTokens);
         usdc = ERC20(_usdc);
+    }
+
+    function getAmountOwed(uint256 _loanId, uint256 _paybackTime) public view returns (uint256) {
+        uint256 loanDuration = _paybackTime - loans[_loanId].startTime;
+        return _calculateAmountOwed(loans[_loanId].loanAmount, loans[_loanId].rate, loanDuration);
     }
 
     /// @notice Submit a request for loan offers
