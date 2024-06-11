@@ -22,6 +22,7 @@ struct Request {
     address borrower;
     uint256 positionId;
     uint256 collateralAmount;
+    uint256 minimumDuration;
 }
 
 struct Offer {
@@ -29,15 +30,16 @@ struct Offer {
     address lender;
     uint256 loanAmount;
     uint256 rate;
-    uint256 minimumDuration;
 }
 
 interface PolyLendEE {
-    event LoanRequested(uint256 id, address borrower, uint256 positionId, uint256 collateralAmount);
-    event LoanOffered(uint256 id, address lender, uint256 loanAmount, uint256 rate, uint256 minimumDuration);
     event LoanAccepted(uint256 id, uint256 startTime);
     event LoanCalled(uint256 id, uint256 callTime);
+    event LoanOffered(uint256 id, address lender, uint256 loanAmount, uint256 rate);
     event LoanRepayed(uint256 id);
+    event LoanRequested(
+        uint256 id, address borrower, uint256 positionId, uint256 collateralAmount, uint256 minimumDuration
+    );
     event LoanTransferred(uint256 oldId, uint256 newId, address newLender, uint256 newRate);
 
     error CollateralAmountIsZero();
@@ -91,7 +93,10 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Submit a request for loan offers
-    function request(uint256 _positionId, uint256 _collateralAmount) public returns (uint256) {
+    function request(uint256 _positionId, uint256 _collateralAmount, uint256 _minimumDuration)
+        public
+        returns (uint256)
+    {
         if (_collateralAmount == 0) {
             revert CollateralAmountIsZero();
         }
@@ -107,8 +112,8 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         uint256 requestId = nextRequestId;
         nextRequestId += 1;
 
-        requests[requestId] = Request(msg.sender, _positionId, _collateralAmount);
-        emit LoanRequested(requestId, msg.sender, _positionId, _collateralAmount);
+        requests[requestId] = Request(msg.sender, _positionId, _collateralAmount, _minimumDuration);
+        emit LoanRequested(requestId, msg.sender, _positionId, _collateralAmount, _minimumDuration);
 
         return requestId;
     }
@@ -123,10 +128,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Submit a loan offer for a request
-    function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate, uint256 _minimumDuration)
-        public
-        returns (uint256)
-    {
+    function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate) public returns (uint256) {
         if (requests[_requestId].borrower == address(0)) {
             revert InvalidRequest();
         }
@@ -146,9 +148,9 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         uint256 offerId = nextOfferId;
         nextOfferId += 1;
 
-        offers[offerId] = Offer(_requestId, msg.sender, _loanAmount, _rate, _minimumDuration);
+        offers[offerId] = Offer(_requestId, msg.sender, _loanAmount, _rate);
 
-        emit LoanOffered(_requestId, msg.sender, _loanAmount, _rate, _minimumDuration);
+        emit LoanOffered(_requestId, msg.sender, _loanAmount, _rate);
 
         return offerId;
     }
@@ -184,7 +186,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
             loanAmount: offers[_offerId].loanAmount,
             rate: offers[_offerId].rate,
             startTime: block.timestamp,
-            minimumDuration: offers[_offerId].minimumDuration,
+            minimumDuration: requests[_offerId].minimumDuration,
             callTime: 0
         });
 

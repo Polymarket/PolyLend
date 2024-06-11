@@ -17,7 +17,7 @@ contract PolyLendTestHelper is Test, PolyLendEE {
     address splitter;
     address lender;
 
-    bytes32 questionId = keccak256("BIDEN TRUMP 2024");
+    bytes32 questionId = keccak256("BIDEN-TRUMP-2024");
     bytes32 conditionId;
     uint256 positionId0;
     uint256 positionId1;
@@ -57,22 +57,21 @@ contract PolyLendTestHelper is Test, PolyLendEE {
     }
 
     function _getRequest(uint256 _requestId) internal view returns (Request memory) {
-        (address borrower_, uint256 positionId_, uint256 collateralAmount_) = polyLend.requests(_requestId);
+        (address borrower_, uint256 positionId_, uint256 collateralAmount_, uint256 minimumDuration_) =
+            polyLend.requests(_requestId);
 
-        return Request({borrower: borrower_, positionId: positionId_, collateralAmount: collateralAmount_});
+        return Request({
+            borrower: borrower_,
+            positionId: positionId_,
+            collateralAmount: collateralAmount_,
+            minimumDuration: minimumDuration_
+        });
     }
 
     function _getOffer(uint256 _offerId) internal view returns (Offer memory) {
-        (uint256 requestId_, address lender_, uint256 loanAmount_, uint256 rate_, uint256 minimumDuration_) =
-            polyLend.offers(_offerId);
+        (uint256 requestId_, address lender_, uint256 loanAmount_, uint256 rate_) = polyLend.offers(_offerId);
 
-        return Offer({
-            requestId: requestId_,
-            lender: lender_,
-            loanAmount: loanAmount_,
-            rate: rate_,
-            minimumDuration: minimumDuration_
-        });
+        return Offer({requestId: requestId_, lender: lender_, loanAmount: loanAmount_, rate: rate_});
     }
 
     function _getLoan(uint256 _loanId) internal view returns (Loan memory) {

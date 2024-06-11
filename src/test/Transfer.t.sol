@@ -30,12 +30,12 @@ contract PolyLendTransferTest is PolyLendTestHelper {
 
         vm.startPrank(borrower);
         conditionalTokens.setApprovalForAll(address(polyLend), true);
-        uint256 requestId = polyLend.request(positionId0, _collateralAmount);
+        uint256 requestId = polyLend.request(positionId0, _collateralAmount, _minimumDuration);
         vm.stopPrank();
 
         vm.startPrank(lender);
         usdc.approve(address(polyLend), _loanAmount);
-        uint256 offerId = polyLend.offer(requestId, _loanAmount, rate, _minimumDuration);
+        uint256 offerId = polyLend.offer(requestId, _loanAmount, rate);
         vm.stopPrank();
 
         vm.startPrank(borrower);
