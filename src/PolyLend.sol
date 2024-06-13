@@ -64,9 +64,8 @@ interface PolyLendEE {
 contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     using InterestLib for uint256;
 
-    // need to calculate a reasonable max interest rate
-    // this is a per second interest rate
-    uint256 public constant MAX_INTEREST = InterestLib.ONE + 2 * 10 ** 11;
+    /// @notice per second rate equal to roughly 1000% APY
+    uint256 public constant MAX_INTEREST = InterestLib.ONE + InterestLib.ONE_THOUSAND_APY;
     uint256 public constant AUCTION_DURATION = 1 days;
     uint256 public constant PAYBACK_BUFFER = 1 minutes;
 

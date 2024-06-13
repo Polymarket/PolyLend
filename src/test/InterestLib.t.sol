@@ -14,4 +14,13 @@ contract InterestLibTest is Test {
 
         assertEq(result, 8 * InterestLib.ONE);
     }
+
+    /// @dev MAX_INTEREST should be within 0.00000001% of 1000% APY
+    function test_InterestLibTest_maxInterest() public pure {
+        uint256 perSecondRate = InterestLib.ONE + InterestLib.ONE_THOUSAND_APY;
+        uint256 perYearRate = perSecondRate.pow(365 days);
+
+        // 1000% APY is (1 + 1000/100) = 11
+        assertApproxEqRel(perYearRate, 11 * 10 ** 18, 10 ** 8);
+    }
 }
