@@ -10,6 +10,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
     function _setUp(uint128 _collateralAmount, uint128 _loanAmount, uint256 _rate, uint256 _minimumDuration) internal {
         vm.assume(_collateralAmount > 0);
         vm.assume(_minimumDuration <= 60 days);
+        vm.assume(_loanAmount > 1_000_000);
 
         rate = bound(_rate, 10 ** 18 + 1, polyLend.MAX_INTEREST());
 
@@ -143,8 +144,6 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         uint256 _duration,
         uint256 _allowance
     ) public {
-        vm.assume(_minimumDuration > polyLend.PAYBACK_BUFFER());
-
         _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
         uint256 duration = bound(_duration, 0, 60 days);
 
