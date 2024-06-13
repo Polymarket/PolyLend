@@ -66,6 +66,33 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         assertEq(conditionalTokens.balanceOf(address(borrower), positionId0), _collateralAmount);
     }
 
+    function test_revert_PolyLendRepayTest_alreadyRepaid_OnlyBorrower(
+        uint64 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint256 _minimumDuration,
+        uint256 _duration
+    ) public {
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+        uint256 duration = bound(_duration, 0, 60 days);
+
+        uint256 paybackTime = block.timestamp + duration;
+        vm.warp(paybackTime);
+
+        uint256 amountOwed = polyLend.getAmountOwed(loanId, paybackTime);
+
+        vm.startPrank(borrower);
+        usdc.mint(borrower, amountOwed - usdc.balanceOf(borrower));
+        usdc.approve(address(polyLend), amountOwed);
+        polyLend.repay(loanId, paybackTime);
+
+        usdc.mint(borrower, amountOwed - usdc.balanceOf(borrower));
+        usdc.approve(address(polyLend), amountOwed);
+        vm.expectRevert(OnlyBorrower.selector);
+        polyLend.repay(loanId, paybackTime);
+        vm.stopPrank();
+    }
+
     function test_revert_PolyLendRepayTest_OnlyBorrower(
         uint64 _collateralAmount,
         uint128 _loanAmount,
@@ -84,7 +111,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
     }
 
     /// @dev Reverts if _repayTimestamp is too early for an uncalled loan
-    function test_revert_PolyLendRepayTest_InvalidRepayTimestamp_1(
+    function test_revert_PolyLendRepayTest_timestampTooEarly_InvalidRepayTimestamp(
         uint64 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -107,7 +134,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
     }
 
     /// @dev Reverts if _repayTimestamp does not equal call time for a called loan
-    function test_revert_PolyLendRepayTest_InvalidRepayTimestamp_2(
+    function test_revert_PolyLendRepayTest_doesNotEqualCallTime_InvalidRepayTimestamp(
         uint64 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,

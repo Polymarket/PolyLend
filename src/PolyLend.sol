@@ -209,6 +209,10 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
 
     /// @notice Call a loan
     function call(uint256 _loanId) public {
+        if (loans[_loanId].borrower == address(0)) {
+            revert InvalidLoan();
+        }
+
         if (loans[_loanId].lender != msg.sender) {
             revert OnlyLender();
         }
