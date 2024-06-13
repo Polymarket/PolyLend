@@ -67,6 +67,8 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     // need to calculate a reasonable max interest rate
     // this is a per second interest rate
     uint256 public constant MAX_INTEREST = InterestLib.ONE + 2 * 10 ** 11;
+    uint256 public constant AUCTION_DURATION = 1 days;
+    uint256 public constant PAYBACK_BUFFER = 5 minutes;
 
     IConditionalTokens public immutable conditionalTokens;
     ERC20 public immutable usdc;
@@ -78,9 +80,6 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     mapping(uint256 => Loan) public loans;
     mapping(uint256 => Request) public requests;
     mapping(uint256 => Offer) public offers;
-
-    uint256 public auctionDuration = 1 days;
-    uint256 public paybackBuffer = 5 minutes;
 
     constructor(address _conditionalTokens, address _usdc) {
         conditionalTokens = IConditionalTokens(_conditionalTokens);
@@ -239,7 +238,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
                 revert InvalidPaybackTime();
             }
         } else {
-            if (_paybackTime + paybackBuffer < block.timestamp) {
+            if (_paybackTime + PAYBACK_BUFFER < block.timestamp) {
                 revert InvalidPaybackTime();
             }
         }
@@ -271,11 +270,11 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
             revert LoanIsNotCalled();
         }
 
-        if (block.timestamp > loans[_loanId].callTime + auctionDuration) {
+        if (block.timestamp > loans[_loanId].callTime + AUCTION_DURATION) {
             revert AuctionHasEnded();
         }
 
-        uint256 currentInterestRate = (block.timestamp - loans[_loanId].callTime) * MAX_INTEREST / auctionDuration;
+        uint256 currentInterestRate = (block.timestamp - loans[_loanId].callTime) * MAX_INTEREST / AUCTION_DURATION;
 
         // _newRate must be less than or equal to the current offered rate
         if (_newRate > currentInterestRate) {

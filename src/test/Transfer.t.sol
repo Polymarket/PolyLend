@@ -19,8 +19,6 @@ contract PolyLendTransferTest is PolyLendTestHelper {
         uint256 _minimumDuration,
         uint256 _duration
     ) internal returns (uint256) {
-        newLender = vm.createWallet("oracle").addr;
-
         vm.assume(_collateralAmount > 0);
 
         rate = bound(_rate, 10 ** 18 + 1, polyLend.MAX_INTEREST());
@@ -61,7 +59,8 @@ contract PolyLendTransferTest is PolyLendTestHelper {
         uint256 _rate,
         uint32 _minimumDuration,
         uint256 _duration,
-        uint256 _auctionLength
+        uint256 _auctionLength,
+        uint256 _newRate
     ) public {
         vm.assume(_minimumDuration <= 60 days);
 
@@ -70,14 +69,14 @@ contract PolyLendTransferTest is PolyLendTestHelper {
 
         {
             uint256 duration = bound(_duration, _minimumDuration, 60 days);
-            uint256 auctionLength = bound(_auctionLength, 0, polyLend.auctionDuration());
+            uint256 auctionLength = bound(_auctionLength, 0, polyLend.AUCTION_DURATION());
             loanId = _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration, duration);
 
             callTime = block.timestamp;
             vm.warp(block.timestamp + auctionLength);
         }
 
-        uint256 newRate = _getNewRate(callTime);
+        uint256 newRate = bound(_newRate, 0, _getNewRate(callTime));
         uint256 newLoanId = loanId + 1;
 
         uint256 amountOwed = polyLend.getAmountOwed(loanId, callTime);
@@ -101,5 +100,81 @@ contract PolyLendTransferTest is PolyLendTestHelper {
         assertEq(newLoan.startTime, block.timestamp);
         assertEq(newLoan.minimumDuration, 0);
         assertEq(newLoan.callTime, 0);
+    }
+
+    function test_revert_PolyLend_transfer_InvalidLoan(uint256 _loanId, uint256 _newRate) public {
+        vm.assume(_loanId != 0);
+
+        vm.startPrank(newLender);
+        vm.expectRevert(InvalidLoan.selector);
+        polyLend.transfer(_loanId, _newRate);
+        vm.stopPrank();
+    }
+
+    function test_revert_PolyLend_transfer_LoanIsNotCalled(
+        uint128 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint32 _minimumDuration,
+        uint256 _newRate
+    ) public {
+        newLender = vm.createWallet("oracle").addr;
+
+        vm.assume(_collateralAmount > 0);
+
+        rate = bound(_rate, 10 ** 18 + 1, polyLend.MAX_INTEREST());
+
+        _mintConditionalTokens(borrower, _collateralAmount, positionId0);
+        usdc.mint(lender, _loanAmount);
+
+        vm.startPrank(borrower);
+        conditionalTokens.setApprovalForAll(address(polyLend), true);
+        uint256 requestId = polyLend.request(positionId0, _collateralAmount, _minimumDuration);
+        vm.stopPrank();
+
+        vm.startPrank(lender);
+        usdc.approve(address(polyLend), _loanAmount);
+        uint256 offerId = polyLend.offer(requestId, _loanAmount, rate);
+        vm.stopPrank();
+
+        vm.startPrank(borrower);
+        vm.expectEmit();
+        emit LoanAccepted(requestId, block.timestamp);
+        uint256 loanId = polyLend.accept(requestId, offerId);
+        vm.stopPrank();
+
+        vm.startPrank(newLender);
+        vm.expectRevert(LoanIsNotCalled.selector);
+        polyLend.transfer(loanId, _newRate);
+        vm.stopPrank();
+    }
+
+    function test_revert_PolyLend_transfer_AuctionHasEnded(
+        uint128 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint32 _minimumDuration,
+        uint256 _duration,
+        uint256 _auctionLength,
+        uint256 _newRate
+    ) public {
+        vm.assume(_minimumDuration <= 60 days);
+
+        uint256 loanId;
+        uint256 callTime;
+
+        uint256 duration = bound(_duration, _minimumDuration, 60 days);
+        uint256 auctionLength = bound(_auctionLength, polyLend.AUCTION_DURATION() + 1, type(uint32).max);
+        loanId = _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration, duration);
+
+        callTime = block.timestamp;
+        vm.warp(block.timestamp + auctionLength);
+
+        uint256 newRate = bound(_newRate, 0, _getNewRate(callTime));
+
+        vm.startPrank(newLender);
+        vm.expectRevert(AuctionHasEnded.selector);
+        polyLend.transfer(loanId, newRate);
+        vm.stopPrank();
     }
 }
