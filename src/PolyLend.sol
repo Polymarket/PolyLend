@@ -22,6 +22,7 @@ struct Request {
     address borrower;
     uint256 positionId;
     uint256 collateralAmount;
+    uint256 minimumDuration;
 }
 
 struct Offer {
@@ -29,15 +30,16 @@ struct Offer {
     address lender;
     uint256 loanAmount;
     uint256 rate;
-    uint256 minimumDuration;
 }
 
 interface PolyLendEE {
-    event LoanRequested(uint256 id, address borrower, uint256 positionId, uint256 collateralAmount);
-    event LoanOffered(uint256 id, address lender, uint256 loanAmount, uint256 rate, uint256 minimumDuration);
     event LoanAccepted(uint256 id, uint256 startTime);
     event LoanCalled(uint256 id, uint256 callTime);
+    event LoanOffered(uint256 id, address lender, uint256 loanAmount, uint256 rate);
     event LoanRepaid(uint256 id);
+    event LoanRequested(
+        uint256 id, address borrower, uint256 positionId, uint256 collateralAmount, uint256 minimumDuration
+    );
     event LoanTransferred(uint256 oldId, uint256 newId, address newLender, uint256 newRate);
 
     error CollateralAmountIsZero();
@@ -51,7 +53,7 @@ interface PolyLendEE {
     error InsufficientFunds();
     error InsufficientAllowance();
     error InvalidRate();
-    error InvalidPaybackTime();
+    error InvalidRepayTimestamp();
     error LoanIsNotCalled();
     error LoanIsCalled();
     error MinimumDurationHasNotPassed();
@@ -65,6 +67,8 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     // need to calculate a reasonable max interest rate
     // this is a per second interest rate
     uint256 public constant MAX_INTEREST = InterestLib.ONE + 2 * 10 ** 11;
+    uint256 public constant AUCTION_DURATION = 1 days;
+    uint256 public constant PAYBACK_BUFFER = 5 minutes;
 
     IConditionalTokens public immutable conditionalTokens;
     ERC20 public immutable usdc;
@@ -77,9 +81,6 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     mapping(uint256 => Request) public requests;
     mapping(uint256 => Offer) public offers;
 
-    uint256 public auctionDuration = 1 days;
-    uint256 public paybackBuffer = 5 minutes;
-
     constructor(address _conditionalTokens, address _usdc) {
         conditionalTokens = IConditionalTokens(_conditionalTokens);
         usdc = ERC20(_usdc);
@@ -91,7 +92,10 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Submit a request for loan offers
-    function request(uint256 _positionId, uint256 _collateralAmount) public returns (uint256) {
+    function request(uint256 _positionId, uint256 _collateralAmount, uint256 _minimumDuration)
+        public
+        returns (uint256)
+    {
         if (_collateralAmount == 0) {
             revert CollateralAmountIsZero();
         }
@@ -107,8 +111,8 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         uint256 requestId = nextRequestId;
         nextRequestId += 1;
 
-        requests[requestId] = Request(msg.sender, _positionId, _collateralAmount);
-        emit LoanRequested(requestId, msg.sender, _positionId, _collateralAmount);
+        requests[requestId] = Request(msg.sender, _positionId, _collateralAmount, _minimumDuration);
+        emit LoanRequested(requestId, msg.sender, _positionId, _collateralAmount, _minimumDuration);
 
         return requestId;
     }
@@ -123,10 +127,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Submit a loan offer for a request
-    function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate, uint256 _minimumDuration)
-        public
-        returns (uint256)
-    {
+    function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate) public returns (uint256) {
         if (requests[_requestId].borrower == address(0)) {
             revert InvalidRequest();
         }
@@ -146,9 +147,9 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         uint256 offerId = nextOfferId;
         nextOfferId += 1;
 
-        offers[offerId] = Offer(_requestId, msg.sender, _loanAmount, _rate, _minimumDuration);
+        offers[offerId] = Offer(_requestId, msg.sender, _loanAmount, _rate);
 
-        emit LoanOffered(_requestId, msg.sender, _loanAmount, _rate, _minimumDuration);
+        emit LoanOffered(_requestId, msg.sender, _loanAmount, _rate);
 
         return offerId;
     }
@@ -184,7 +185,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
             loanAmount: offers[_offerId].loanAmount,
             rate: offers[_offerId].rate,
             startTime: block.timestamp,
-            minimumDuration: offers[_offerId].minimumDuration,
+            minimumDuration: requests[_offerId].minimumDuration,
             callTime: 0
         });
 
@@ -227,25 +228,30 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Repay a loan
-    function repay(uint256 _loanId, uint256 _paybackTime) public {
+    /// @notice It is possible that the the block.timestamp will differ
+    /// @notice from the time that the transaction is submitted to the
+    /// @notice block when it is mined.
+    function repay(uint256 _loanId, uint256 _repayTimestamp) public {
         if (loans[_loanId].borrower != msg.sender) {
             revert OnlyBorrower();
         }
 
         // if the loan has not been called,
-        // the payback time can be up to paybackBuffer seconds in the future
+        // _repayTimestamp can be up to PAYBACK_BUFFER seconds in the past
         if (loans[_loanId].callTime == 0) {
-            if (_paybackTime + paybackBuffer < block.timestamp) {
-                revert InvalidPaybackTime();
+            if (_repayTimestamp + PAYBACK_BUFFER < block.timestamp) {
+                revert InvalidRepayTimestamp();
             }
-        } else {
-            if (loans[_loanId].callTime != _paybackTime) {
-                revert InvalidPaybackTime();
+        }
+        // otherwise, the payback time must be the call time
+        else {
+            if (loans[_loanId].callTime != _repayTimestamp) {
+                revert InvalidRepayTimestamp();
             }
         }
 
         // compute accrued interest
-        uint256 loanDuration = _paybackTime - loans[_loanId].startTime;
+        uint256 loanDuration = _repayTimestamp - loans[_loanId].startTime;
         uint256 amountOwed = _calculateAmountOwed(loans[_loanId].loanAmount, loans[_loanId].rate, loanDuration);
 
         // transfer usdc from the borrower to the lender
@@ -271,11 +277,11 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
             revert LoanIsNotCalled();
         }
 
-        if (block.timestamp > loans[_loanId].callTime + auctionDuration) {
+        if (block.timestamp > loans[_loanId].callTime + AUCTION_DURATION) {
             revert AuctionHasEnded();
         }
 
-        uint256 currentInterestRate = (block.timestamp - loans[_loanId].callTime) * MAX_INTEREST / auctionDuration;
+        uint256 currentInterestRate = (block.timestamp - loans[_loanId].callTime) * MAX_INTEREST / AUCTION_DURATION;
 
         // _newRate must be less than or equal to the current offered rate
         if (_newRate > currentInterestRate) {

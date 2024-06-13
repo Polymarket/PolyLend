@@ -10,7 +10,7 @@ contract PolyLendRequestTest is PolyLendTestHelper {
         uint128 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
-        uint256 _minimumDuration
+        uint32 _minimumDuration
     ) public {
         vm.assume(_collateralAmount > 0);
         vm.assume(_minimumDuration <= 60 days);
@@ -22,12 +22,12 @@ contract PolyLendRequestTest is PolyLendTestHelper {
 
         vm.startPrank(borrower);
         conditionalTokens.setApprovalForAll(address(polyLend), true);
-        uint256 requestId = polyLend.request(positionId0, _collateralAmount);
+        uint256 requestId = polyLend.request(positionId0, _collateralAmount, _minimumDuration);
         vm.stopPrank();
 
         vm.startPrank(lender);
         usdc.approve(address(polyLend), _loanAmount);
-        polyLend.offer(requestId, _loanAmount, rate, _minimumDuration);
+        polyLend.offer(requestId, _loanAmount, rate);
         vm.stopPrank();
 
         vm.startPrank(borrower);

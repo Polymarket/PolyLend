@@ -78,7 +78,28 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
-    function test_revert_PolyLendRepayTest_InvalidPayBackTime_1(
+    function test_revert_PolyLendRepayTest_InvalidRepayTimestamp_1(
+        uint64 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint256 _minimumDuration,
+        uint256 _duration,
+        uint32 _repayTimestamp
+    ) public {
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+
+        uint256 duration = bound(_duration, _minimumDuration, 60 days);
+        vm.warp(block.timestamp + duration);
+
+        uint256 repayTimestamp = bound(_repayTimestamp, 0, block.timestamp - polyLend.PAYBACK_BUFFER());
+
+        vm.startPrank(borrower);
+        vm.expectRevert(InvalidRepayTimestamp.selector);
+        polyLend.repay(loanId, repayTimestamp);
+        vm.stopPrank();
+    }
+
+    function test_revert_PolyLendRepayTest_InvalidRepayTimestamp_2(
         uint64 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -102,7 +123,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         vm.stopPrank();
 
         vm.startPrank(borrower);
-        vm.expectRevert(InvalidPaybackTime.selector);
+        vm.expectRevert(InvalidRepayTimestamp.selector);
         polyLend.repay(loanId, _repayTime);
         vm.stopPrank();
     }
