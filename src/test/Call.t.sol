@@ -118,4 +118,31 @@ contract PolyLendCallTest is PolyLendTestHelper {
         polyLend.call(loanId);
         vm.stopPrank();
     }
+
+    function test_revert_PolyLendCallTest_loanIsRepaid(
+        uint128 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint256 _minimumDuration,
+        uint256 _duration
+    ) public {
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+        uint256 duration = bound(_duration, _minimumDuration, 60 days);
+
+        uint256 paybackTime = block.timestamp + duration;
+        vm.warp(paybackTime);
+
+        uint256 amountOwed = polyLend.getAmountOwed(loanId, paybackTime);
+
+        vm.startPrank(borrower);
+        usdc.mint(borrower, amountOwed - usdc.balanceOf(borrower));
+        usdc.approve(address(polyLend), amountOwed);
+        polyLend.repay(loanId, paybackTime);
+        vm.stopPrank();
+
+        vm.startPrank(lender);
+        vm.expectRevert(InvalidLoan.selector);
+        polyLend.call(loanId);
+        vm.stopPrank();
+    }
 }
