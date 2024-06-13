@@ -68,7 +68,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     // this is a per second interest rate
     uint256 public constant MAX_INTEREST = InterestLib.ONE + 2 * 10 ** 11;
     uint256 public constant AUCTION_DURATION = 1 days;
-    uint256 public constant PAYBACK_BUFFER = 5 minutes;
+    uint256 public constant PAYBACK_BUFFER = 1 minutes;
 
     IConditionalTokens public immutable conditionalTokens;
     ERC20 public immutable usdc;

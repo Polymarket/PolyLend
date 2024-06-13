@@ -18,12 +18,12 @@ contract PolyLendRepayTest is PolyLendTestHelper {
 
         vm.startPrank(borrower);
         conditionalTokens.setApprovalForAll(address(polyLend), true);
-        uint256 requestId = polyLend.request(positionId0, _collateralAmount);
+        uint256 requestId = polyLend.request(positionId0, _collateralAmount, _minimumDuration);
         vm.stopPrank();
 
         vm.startPrank(lender);
         usdc.approve(address(polyLend), _loanAmount);
-        uint256 offerId = polyLend.offer(requestId, _loanAmount, rate, _minimumDuration);
+        uint256 offerId = polyLend.offer(requestId, _loanAmount, rate);
         vm.stopPrank();
 
         vm.startPrank(borrower);
@@ -33,7 +33,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
-    function test_PolyLendRepay_repay(
+    function test_PolyLendRepayTest_repay(
         uint64 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -49,7 +49,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         uint256 amountOwed = polyLend.getAmountOwed(loanId, paybackTime);
 
         vm.startPrank(borrower);
-        usdc.mint(borrower, amountOwed);
+        usdc.mint(borrower, amountOwed - usdc.balanceOf(borrower));
         usdc.approve(address(polyLend), amountOwed);
         vm.expectEmit();
         emit LoanRepaid(loanId);
@@ -59,6 +59,10 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         Loan memory loan = _getLoan(loanId);
 
         assertEq(loan.borrower, address(0));
+        assertEq(usdc.balanceOf(borrower), 0);
+        assertEq(usdc.balanceOf(lender), amountOwed);
+        assertEq(conditionalTokens.balanceOf(address(polyLend), positionId0), 0);
+        assertEq(conditionalTokens.balanceOf(address(borrower), positionId0), _collateralAmount);
     }
 
     function test_revert_PolyLendRepayTest_OnlyBorrower(
@@ -78,6 +82,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
+    /// @dev Reverts if _repayTimestamp is too early for an uncalled loan
     function test_revert_PolyLendRepayTest_InvalidRepayTimestamp_1(
         uint64 _collateralAmount,
         uint128 _loanAmount,
@@ -86,6 +91,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         uint256 _duration,
         uint32 _repayTimestamp
     ) public {
+        vm.assume(_minimumDuration > polyLend.PAYBACK_BUFFER());
         _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
 
         uint256 duration = bound(_duration, _minimumDuration, 60 days);
@@ -99,6 +105,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
+    /// @dev Reverts if _repayTimestamp does not equal call time for a called loan
     function test_revert_PolyLendRepayTest_InvalidRepayTimestamp_2(
         uint64 _collateralAmount,
         uint128 _loanAmount,
@@ -125,6 +132,33 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         vm.startPrank(borrower);
         vm.expectRevert(InvalidRepayTimestamp.selector);
         polyLend.repay(loanId, _repayTime);
+        vm.stopPrank();
+    }
+
+    function test_revert_PolyLendRepayTest_InsufficientAllowance(
+        uint64 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint256 _minimumDuration,
+        uint256 _duration,
+        uint256 _allowance
+    ) public {
+        vm.assume(_minimumDuration > polyLend.PAYBACK_BUFFER());
+
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+        uint256 duration = bound(_duration, 0, 60 days);
+
+        uint256 paybackTime = block.timestamp + duration;
+        vm.warp(paybackTime);
+
+        uint256 amountOwed = polyLend.getAmountOwed(loanId, paybackTime);
+        uint256 allowance = bound(_allowance, 0, amountOwed - 1);
+
+        vm.startPrank(borrower);
+        usdc.mint(borrower, amountOwed);
+        usdc.approve(address(polyLend), allowance);
+        vm.expectRevert(InsufficientAllowance.selector);
+        polyLend.repay(loanId, paybackTime);
         vm.stopPrank();
     }
 }
