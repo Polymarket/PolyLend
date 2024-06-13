@@ -37,7 +37,7 @@ interface PolyLendEE {
     event LoanOffered(uint256 id, address lender, uint256 loanAmount, uint256 rate, uint256 minimumDuration);
     event LoanAccepted(uint256 id, uint256 startTime);
     event LoanCalled(uint256 id, uint256 callTime);
-    event LoanRepayed(uint256 id);
+    event LoanRepaid(uint256 id);
     event LoanTransferred(uint256 oldId, uint256 newId, address newLender, uint256 newRate);
 
     error CollateralAmountIsZero();
@@ -227,17 +227,19 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Repay a loan
-    function payback(uint256 _loanId, uint256 _paybackTime) public {
+    function repay(uint256 _loanId, uint256 _paybackTime) public {
         if (loans[_loanId].borrower != msg.sender) {
             revert OnlyBorrower();
         }
 
-        if (loans[_loanId].callTime != 0) {
-            if (loans[_loanId].callTime != _paybackTime) {
+        // if the loan has not been called,
+        // the payback time can be up to paybackBuffer seconds in the future
+        if (loans[_loanId].callTime == 0) {
+            if (_paybackTime + paybackBuffer < block.timestamp) {
                 revert InvalidPaybackTime();
             }
         } else {
-            if (_paybackTime + paybackBuffer < block.timestamp) {
+            if (loans[_loanId].callTime != _paybackTime) {
                 revert InvalidPaybackTime();
             }
         }
@@ -256,7 +258,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         // cancel loan
         loans[_loanId].borrower = address(0);
 
-        emit LoanRepayed(_loanId);
+        emit LoanRepaid(_loanId);
     }
 
     /// @notice Transfer a called loan to a new lender
