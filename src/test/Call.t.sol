@@ -27,9 +27,7 @@ contract PolyLendCallTest is PolyLendTestHelper {
         vm.stopPrank();
 
         vm.startPrank(borrower);
-        vm.expectEmit();
-        emit LoanAccepted(requestId, block.timestamp);
-        loanId = polyLend.accept(requestId, offerId);
+        loanId = polyLend.accept(offerId);
         vm.stopPrank();
     }
 

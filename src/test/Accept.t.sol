@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {PolyLendTestHelper} from "./PolyLendTestHelper.sol";
+import {PolyLendTestHelper, Loan} from "./PolyLendTestHelper.sol";
 
 contract PolyLendRequestTest is PolyLendTestHelper {
     uint256 rate;
@@ -27,36 +27,26 @@ contract PolyLendRequestTest is PolyLendTestHelper {
 
         vm.startPrank(lender);
         usdc.approve(address(polyLend), _loanAmount);
-        polyLend.offer(requestId, _loanAmount, rate);
+        uint256 offerId = polyLend.offer(requestId, _loanAmount, rate);
         vm.stopPrank();
 
         vm.startPrank(borrower);
         vm.expectEmit();
         emit LoanAccepted(requestId, block.timestamp);
-        polyLend.accept(requestId, 0);
+        polyLend.accept(offerId);
         vm.stopPrank();
 
-        (
-            address borrower_,
-            address lender_,
-            uint256 positionId_,
-            uint256 collateralAmount_,
-            uint256 loanAmount_,
-            uint256 rate_,
-            uint256 startTime_,
-            uint256 minimumDuration_,
-            uint256 callTime_
-        ) = polyLend.loans(0);
+        Loan memory loan = _getLoan(0);
 
-        assertEq(borrower_, borrower);
-        assertEq(lender_, lender);
-        assertEq(positionId_, positionId0);
-        assertEq(collateralAmount_, _collateralAmount);
-        assertEq(loanAmount_, _loanAmount);
-        assertEq(rate_, rate);
-        assertEq(startTime_, block.timestamp);
-        assertEq(minimumDuration_, _minimumDuration);
-        assertEq(callTime_, 0);
+        assertEq(loan.borrower, borrower);
+        assertEq(loan.lender, lender);
+        assertEq(loan.positionId, positionId0);
+        assertEq(loan.collateralAmount, _collateralAmount);
+        assertEq(loan.loanAmount, _loanAmount);
+        assertEq(loan.rate, rate);
+        assertEq(loan.startTime, block.timestamp);
+        assertEq(loan.minimumDuration, _minimumDuration);
+        assertEq(loan.callTime, 0);
 
         assertEq(usdc.balanceOf(borrower), _loanAmount);
         assertEq(conditionalTokens.balanceOf(address(polyLend), positionId0), _collateralAmount);
