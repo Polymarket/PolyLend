@@ -123,7 +123,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         uint256 duration = bound(_duration, _minimumDuration, 60 days);
         vm.warp(block.timestamp + duration);
 
-        uint256 repayTimestamp = bound(_repayTimestamp, 0, block.timestamp - polyLend.PAYBACK_BUFFER());
+        uint256 repayTimestamp = bound(_repayTimestamp, 0, block.timestamp - polyLend.PAYBACK_BUFFER() - 1);
 
         vm.startPrank(borrower);
         vm.expectRevert(InvalidRepayTimestamp.selector);
