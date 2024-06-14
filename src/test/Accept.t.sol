@@ -3,15 +3,11 @@ pragma solidity ^0.8.15;
 
 import {PolyLendTestHelper, Loan} from "./PolyLendTestHelper.sol";
 
-contract PolyLendRequestTest is PolyLendTestHelper {
+contract PolyLendAcceptTest is PolyLendTestHelper {
     uint256 rate;
+    uint256 offerId;
 
-    function test_PolyLend_accept(
-        uint128 _collateralAmount,
-        uint128 _loanAmount,
-        uint256 _rate,
-        uint32 _minimumDuration
-    ) public {
+    function _setUp(uint128 _collateralAmount, uint128 _loanAmount, uint256 _rate, uint32 _minimumDuration) internal {
         vm.assume(_collateralAmount > 0);
         vm.assume(_minimumDuration <= 60 days);
 
@@ -27,12 +23,21 @@ contract PolyLendRequestTest is PolyLendTestHelper {
 
         vm.startPrank(lender);
         usdc.approve(address(polyLend), _loanAmount);
-        uint256 offerId = polyLend.offer(requestId, _loanAmount, rate);
+        offerId = polyLend.offer(requestId, _loanAmount, rate);
         vm.stopPrank();
+    }
+
+    function test_PolyLendAcceptTest_accept(
+        uint128 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint32 _minimumDuration
+    ) public {
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
 
         vm.startPrank(borrower);
         vm.expectEmit();
-        emit LoanAccepted(requestId, block.timestamp);
+        emit LoanAccepted(0, block.timestamp);
         polyLend.accept(offerId);
         vm.stopPrank();
 
@@ -50,5 +55,39 @@ contract PolyLendRequestTest is PolyLendTestHelper {
 
         assertEq(usdc.balanceOf(borrower), _loanAmount);
         assertEq(conditionalTokens.balanceOf(address(polyLend), positionId0), _collateralAmount);
+    }
+
+    function test_revert_PolyLendAcceptTest_accept_OnlyBorrower(
+        uint128 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint32 _minimumDuration,
+        address _caller
+    ) public {
+        vm.assume(_caller != borrower);
+
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+
+        vm.startPrank(_caller);
+        vm.expectRevert(OnlyBorrower.selector);
+        polyLend.accept(offerId);
+        vm.stopPrank();
+    }
+
+    function test_revert_PolyLendAcceptTest_accept_InvalidOffer(
+        uint128 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint32 _minimumDuration,
+        uint256 _offerId
+    ) public {
+        vm.assume(_offerId > 0);
+
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+
+        vm.startPrank(borrower);
+        vm.expectRevert(InvalidOffer.selector);
+        polyLend.accept(_offerId);
+        vm.stopPrank();
     }
 }

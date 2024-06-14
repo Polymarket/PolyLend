@@ -7,7 +7,7 @@ import {InterestLib} from "../InterestLib.sol";
 contract InterestLibTest is Test {
     using InterestLib for uint256;
 
-    function testPow() public pure {
+    function test_InterestLibTest_pow() public pure {
         uint256 base = 2 * InterestLib.ONE;
         uint256 exponent = 3;
         uint256 result = base.pow(exponent);

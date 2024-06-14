@@ -4,7 +4,7 @@ pragma solidity ^0.8.15;
 import {PolyLendTestHelper, Request} from "./PolyLendTestHelper.sol";
 
 contract PolyLendRequestTest is PolyLendTestHelper {
-    function test_PolyLend_request(uint128 _amount, uint32 _minimumDuration) public {
+    function test_PolyLendRequestTest_request(uint128 _amount, uint32 _minimumDuration) public {
         vm.assume(_amount > 0);
         vm.assume(_minimumDuration <= 60 days);
 
@@ -26,19 +26,19 @@ contract PolyLendRequestTest is PolyLendTestHelper {
         assertEq(request.minimumDuration, _minimumDuration);
     }
 
-    function test_revert_PolyLend_request_CollateralAmountIsZero() public {
+    function test_revert_PolyLendRequestTest_request_CollateralAmountIsZero() public {
         vm.prank(borrower);
         vm.expectRevert(CollateralAmountIsZero.selector);
         polyLend.request(positionId0, 0, 0);
     }
 
-    function test_revert_PolyLend_request_InsufficientCollateralBalance() public {
+    function test_revert_PolyLendRequestTest_request_InsufficientCollateralBalance() public {
         vm.prank(borrower);
         vm.expectRevert(InsufficientCollateralBalance.selector);
         polyLend.request(positionId0, 100_000_000, 0);
     }
 
-    function test_revert_PolyLend_request_CollateralIsNotApproved() public {
+    function test_revert_PolyLendRequestTest_request_CollateralIsNotApproved() public {
         _mintConditionalTokens(borrower, 100_000_000, positionId0);
 
         vm.prank(borrower);

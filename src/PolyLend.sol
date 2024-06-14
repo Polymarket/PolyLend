@@ -208,7 +208,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         // transfer usdc from the lender to the borrower
         usdc.transferFrom(lender, msg.sender, loanAmount);
 
-        emit LoanAccepted(requestId, block.timestamp);
+        emit LoanAccepted(loanId, block.timestamp);
 
         return loanId;
     }
