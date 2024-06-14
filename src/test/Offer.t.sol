@@ -23,7 +23,6 @@ contract PolyLendOfferTest is PolyLendTestHelper {
 
         vm.startPrank(lender);
         usdc.approve(address(polyLend), _loanAmount);
-
         vm.expectEmit();
         emit LoanOffered(requestId, lender, _loanAmount, rate);
         polyLend.offer(requestId, _loanAmount, rate);
