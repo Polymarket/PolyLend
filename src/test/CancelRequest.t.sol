@@ -33,6 +33,20 @@ contract PolyLendCancelRequestTest is PolyLendTestHelper {
         assertEq(request.minimumDuration, _minimumDuration);
     }
 
+    function test_revert_PolyLendCancelRequestTest_cancelOffer_OnlyBorrower(
+        uint128 _amount,
+        uint32 _minimumDuration,
+        address _caller
+    ) public {
+        vm.assume(_caller != borrower);
+        _setUp(_amount, _minimumDuration);
+
+        vm.startPrank(_caller);
+        vm.expectRevert(OnlyBorrower.selector);
+        polyLend.cancelRequest(requestId);
+        vm.stopPrank();
+    }
+
     function test_revert_PolyLendCancelRequestTest_offer_InvalidRequest(
         uint128 _amount,
         uint32 _minimumDuration,
@@ -64,7 +78,7 @@ contract PolyLendCancelRequestTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
-    function test_revert_PolyLendCancelRequestTest_accept_offerCanceled(
+    function test_revert_PolyLendCancelRequestTest_accept_requestCanceled(
         uint128 _amount,
         uint32 _minimumDuration,
         uint128 _loanAmount,
