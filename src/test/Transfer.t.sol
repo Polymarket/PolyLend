@@ -37,23 +37,19 @@ contract PolyLendTransferTest is PolyLendTestHelper {
         vm.stopPrank();
 
         vm.startPrank(borrower);
-        vm.expectEmit();
-        emit LoanAccepted(requestId, block.timestamp);
         uint256 loanId = polyLend.accept(offerId);
         vm.stopPrank();
 
         vm.warp(block.timestamp + _duration);
 
         vm.startPrank(lender);
-        vm.expectEmit();
-        emit LoanCalled(loanId, block.timestamp);
         polyLend.call(loanId);
         vm.stopPrank();
 
         return loanId;
     }
 
-    function test_PolyLend_transfer(
+    function test_PolyLendTransferTest_transfer(
         uint128 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -102,7 +98,7 @@ contract PolyLendTransferTest is PolyLendTestHelper {
         assertEq(newLoan.callTime, 0);
     }
 
-    function test_revert_PolyLend_transfer_InvalidLoan(uint256 _loanId, uint256 _newRate) public {
+    function test_revert_PolyLendTransferTest_transfer_InvalidLoan(uint256 _loanId, uint256 _newRate) public {
         vm.assume(_loanId != 0);
 
         vm.startPrank(newLender);
@@ -111,7 +107,7 @@ contract PolyLendTransferTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
-    function test_revert_PolyLend_transfer_LoanIsNotCalled(
+    function test_revert_PolyLendTransferTest_transfer_LoanIsNotCalled(
         uint128 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -149,7 +145,7 @@ contract PolyLendTransferTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
-    function test_revert_PolyLend_transfer_AuctionHasEnded(
+    function test_revert_PolyLendTransferTest_transfer_AuctionHasEnded(
         uint128 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -174,6 +170,41 @@ contract PolyLendTransferTest is PolyLendTestHelper {
 
         vm.startPrank(newLender);
         vm.expectRevert(AuctionHasEnded.selector);
+        polyLend.transfer(loanId, newRate);
+        vm.stopPrank();
+    }
+
+    function test_revert_PolyLendTransferTest_transfer_InvalidRate(
+        uint128 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint32 _minimumDuration,
+        uint256 _duration,
+        uint256 _auctionLength,
+        uint256 _newRate
+    ) public {
+        vm.assume(_minimumDuration <= 60 days);
+
+        uint256 loanId;
+        uint256 callTime;
+
+        {
+            uint256 duration = bound(_duration, _minimumDuration, 60 days);
+            uint256 auctionLength = bound(_auctionLength, 0, polyLend.AUCTION_DURATION());
+            loanId = _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration, duration);
+
+            callTime = block.timestamp;
+            vm.warp(block.timestamp + auctionLength);
+        }
+
+        uint256 newRate = bound(_newRate, _getNewRate(callTime) + 1, type(uint64).max);
+
+        uint256 amountOwed = polyLend.getAmountOwed(loanId, callTime);
+        usdc.mint(newLender, amountOwed);
+
+        vm.startPrank(newLender);
+        usdc.approve(address(polyLend), amountOwed);
+        vm.expectRevert(InvalidRate.selector);
         polyLend.transfer(loanId, newRate);
         vm.stopPrank();
     }

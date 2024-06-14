@@ -64,6 +64,46 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         assertEq(conditionalTokens.balanceOf(address(borrower), positionId0), _collateralAmount);
     }
 
+    function test_PolyLendRepayTest_repay_calledLoan(
+        uint64 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint256 _minimumDuration,
+        uint256 _duration,
+        uint256 _auctionDuration
+    ) public {
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+
+        uint256 duration = bound(_duration, _minimumDuration, 90 days);
+        uint256 auctionDuration = bound(_auctionDuration, 0, polyLend.AUCTION_DURATION());
+
+        uint256 callTime = block.timestamp + duration;
+        vm.warp(callTime);
+
+        vm.startPrank(lender);
+        polyLend.call(loanId);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + auctionDuration);
+        uint256 amountOwed = polyLend.getAmountOwed(loanId, callTime);
+
+        vm.startPrank(borrower);
+        usdc.mint(borrower, amountOwed - usdc.balanceOf(borrower));
+        usdc.approve(address(polyLend), amountOwed);
+        vm.expectEmit();
+        emit LoanRepaid(loanId);
+        polyLend.repay(loanId, callTime);
+        vm.stopPrank();
+
+        Loan memory loan = _getLoan(loanId);
+
+        assertEq(loan.borrower, address(0));
+        assertEq(usdc.balanceOf(borrower), 0);
+        assertEq(usdc.balanceOf(lender), amountOwed);
+        assertEq(conditionalTokens.balanceOf(address(polyLend), positionId0), 0);
+        assertEq(conditionalTokens.balanceOf(address(borrower), positionId0), _collateralAmount);
+    }
+
     function test_PolyLendRepayTest_repay_paybackBuffer(
         uint64 _collateralAmount,
         uint128 _loanAmount,
@@ -98,7 +138,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         assertEq(conditionalTokens.balanceOf(address(borrower), positionId0), _collateralAmount);
     }
 
-    function test_revert_PolyLendRepayTest_alreadyRepaid_OnlyBorrower(
+    function test_revert_PolyLendRepayTest_repay_alreadyRepaid_OnlyBorrower(
         uint64 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -125,7 +165,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
-    function test_revert_PolyLendRepayTest_OnlyBorrower(
+    function test_revert_PolyLendRepayTest_repay_OnlyBorrower(
         uint64 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -143,7 +183,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
     }
 
     /// @dev Reverts if _repayTimestamp is too early for an uncalled loan
-    function test_revert_PolyLendRepayTest_timestampTooEarly_InvalidRepayTimestamp(
+    function test_revert_PolyLendRepayTest_repay_timestampTooEarly_InvalidRepayTimestamp(
         uint64 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -166,7 +206,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
     }
 
     /// @dev Reverts if _repayTimestamp does not equal call time for a called loan
-    function test_revert_PolyLendRepayTest_doesNotEqualCallTime_InvalidRepayTimestamp(
+    function test_revert_PolyLendRepayTest_repay_doesNotEqualCallTime_InvalidRepayTimestamp(
         uint64 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -195,7 +235,7 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
-    function test_revert_PolyLendRepayTest_InsufficientAllowance(
+    function test_revert_PolyLendRepayTest_repay_InsufficientAllowance(
         uint64 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,

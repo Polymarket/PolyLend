@@ -31,7 +31,7 @@ contract PolyLendCallTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
-    function test_PolyLend_call(
+    function test_PolyLendCallTest_call(
         uint128 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -63,7 +63,7 @@ contract PolyLendCallTest is PolyLendTestHelper {
         assertEq(loan.callTime, block.timestamp);
     }
 
-    function test_revert_PolyLend_call_OnlyLender(
+    function test_revert_PolyLendCallTest_call_OnlyLender(
         uint128 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -79,7 +79,7 @@ contract PolyLendCallTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
-    function test_revert_PolyLend_call_MinimumDurationHasNotPassed(
+    function test_revert_PolyLendCallTest_call_MinimumDurationHasNotPassed(
         uint128 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
@@ -99,7 +99,7 @@ contract PolyLendCallTest is PolyLendTestHelper {
         vm.stopPrank();
     }
 
-    function test_revert_PolyLend_call_LoanIsCalled(
+    function test_revert_PolyLendCallTest_call_LoanIsCalled(
         uint128 _collateralAmount,
         uint128 _loanAmount,
         uint256 _rate,
