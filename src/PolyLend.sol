@@ -163,25 +163,33 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Accept a loan offer
-    function accept(uint256 _requestId, uint256 _offerId) public returns (uint256) {
-        if (requests[_requestId].borrower != msg.sender) {
+    function accept(uint256 _offerId) public returns (uint256) {
+        uint256 requestId = offers[_offerId].requestId;
+        address borrower = requests[requestId].borrower;
+        address lender = offers[_offerId].lender;
+
+        if (borrower != msg.sender) {
             revert OnlyBorrower();
         }
 
-        if (offers[_offerId].lender == address(0)) {
+        if (lender == address(0)) {
             revert InvalidOffer();
         }
 
         uint256 loanId = nextLoanId;
         nextLoanId += 1;
 
+        uint256 positionId = requests[requestId].positionId;
+        uint256 collateralAmount = requests[requestId].collateralAmount;
+        uint256 loanAmount = offers[_offerId].loanAmount;
+
         // create new loan
         loans[loanId] = Loan({
-            borrower: requests[_requestId].borrower,
-            lender: offers[_offerId].lender,
-            positionId: requests[_requestId].positionId,
-            collateralAmount: requests[_requestId].collateralAmount,
-            loanAmount: offers[_offerId].loanAmount,
+            borrower: borrower,
+            lender: lender,
+            positionId: positionId,
+            collateralAmount: collateralAmount,
+            loanAmount: loanAmount,
             rate: offers[_offerId].rate,
             startTime: block.timestamp,
             minimumDuration: requests[_offerId].minimumDuration,
@@ -189,20 +197,18 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         });
 
         // invalidate the request
-        requests[_requestId].borrower = address(0);
+        requests[requestId].borrower = address(0);
 
         // invalidate the offer
-        offers[_requestId].lender = address(0);
+        offers[requestId].lender = address(0);
 
         // transfer the borrowers collateral to address(this)
-        conditionalTokens.safeTransferFrom(
-            msg.sender, address(this), loans[_requestId].positionId, loans[_requestId].collateralAmount, ""
-        );
+        conditionalTokens.safeTransferFrom(msg.sender, address(this), positionId, collateralAmount, "");
 
         // transfer usdc from the lender to the borrower
-        usdc.transferFrom(loans[_requestId].lender, msg.sender, loans[_requestId].loanAmount);
+        usdc.transferFrom(lender, msg.sender, loanAmount);
 
-        emit LoanAccepted(_requestId, block.timestamp);
+        emit LoanAccepted(requestId, block.timestamp);
 
         return loanId;
     }
