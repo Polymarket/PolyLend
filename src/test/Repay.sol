@@ -64,6 +64,40 @@ contract PolyLendRepayTest is PolyLendTestHelper {
         assertEq(conditionalTokens.balanceOf(address(borrower), positionId0), _collateralAmount);
     }
 
+    function test_PolyLendRepayTest_repay_paybackBuffer(
+        uint64 _collateralAmount,
+        uint128 _loanAmount,
+        uint256 _rate,
+        uint256 _minimumDuration,
+        uint256 _duration,
+        uint256 _repayTimestamp
+    ) public {
+        vm.assume(_minimumDuration > polyLend.PAYBACK_BUFFER());
+        _setUp(_collateralAmount, _loanAmount, _rate, _minimumDuration);
+
+        uint256 duration = bound(_duration, _minimumDuration, 60 days);
+        vm.warp(block.timestamp + duration);
+
+        // allowed repayTimestamps
+        // note that the loan _can_ be paid for a future timestamp
+        uint256 repayTimestamp = bound(_repayTimestamp, block.timestamp - polyLend.PAYBACK_BUFFER(), block.timestamp);
+        uint256 amountOwed = polyLend.getAmountOwed(loanId, repayTimestamp);
+
+        vm.startPrank(borrower);
+        usdc.mint(borrower, amountOwed - usdc.balanceOf(borrower));
+        usdc.approve(address(polyLend), amountOwed);
+        polyLend.repay(loanId, repayTimestamp);
+        vm.stopPrank();
+
+        Loan memory loan = _getLoan(loanId);
+
+        assertEq(loan.borrower, address(0));
+        assertEq(usdc.balanceOf(borrower), 0);
+        assertEq(usdc.balanceOf(lender), amountOwed);
+        assertEq(conditionalTokens.balanceOf(address(polyLend), positionId0), 0);
+        assertEq(conditionalTokens.balanceOf(address(borrower), positionId0), _collateralAmount);
+    }
+
     function test_revert_PolyLendRepayTest_alreadyRepaid_OnlyBorrower(
         uint64 _collateralAmount,
         uint128 _loanAmount,
