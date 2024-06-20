@@ -68,18 +68,35 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
 
     /// @notice per second rate equal to roughly 1000% APY
     uint256 public constant MAX_INTEREST = InterestLib.ONE + InterestLib.ONE_THOUSAND_APY;
+
+    /// @notice duration of the auction for transferring a loan
     uint256 public constant AUCTION_DURATION = 1 days;
+
+    /// @notice buffer for payback time
     uint256 public constant PAYBACK_BUFFER = 1 minutes;
 
+    /// @notice The conditional tokens contract
     IConditionalTokens public immutable conditionalTokens;
+
+    /// @notice The USDC token contract
     ERC20 public immutable usdc;
 
+    /// @notice The next id for a loan
     uint256 public nextLoanId = 0;
+
+    /// @notice The next id for a request
     uint256 public nextRequestId = 0;
+
+    /// @notice The next id for an offer
     uint256 public nextOfferId = 0;
 
+    /// @notice loans mapping
     mapping(uint256 => Loan) public loans;
+
+    /// @notice requests mapping
     mapping(uint256 => Request) public requests;
+
+    /// @notice offers mapping
     mapping(uint256 => Offer) public offers;
 
     constructor(address _conditionalTokens, address _usdc) {
@@ -87,6 +104,10 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         usdc = ERC20(_usdc);
     }
 
+    /// @notice Get the amount owed on a loan
+    /// @param _loanId The id of the loan
+    /// @param _paybackTime The time at which the loan will be paid back
+    /// @return The amount owed on the loan
     function getAmountOwed(uint256 _loanId, uint256 _paybackTime) public view returns (uint256) {
         uint256 loanDuration = _paybackTime - loans[_loanId].startTime;
         return _calculateAmountOwed(loans[_loanId].loanAmount, loans[_loanId].rate, loanDuration);
