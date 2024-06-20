@@ -96,6 +96,9 @@ contract PolyLendTransferTest is PolyLendTestHelper {
         assertEq(newLoan.startTime, block.timestamp);
         assertEq(newLoan.minimumDuration, 0);
         assertEq(newLoan.callTime, 0);
+
+        assertEq(usdc.balanceOf(lender), amountOwed);
+        assertEq(usdc.balanceOf(newLender), 0);
     }
 
     function test_revert_PolyLendTransferTest_transfer_InvalidLoan(uint256 _loanId, uint256 _newRate) public {
