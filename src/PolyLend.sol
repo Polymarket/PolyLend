@@ -41,6 +41,7 @@ interface PolyLendEE {
         uint256 id, address borrower, uint256 positionId, uint256 collateralAmount, uint256 minimumDuration
     );
     event LoanTransferred(uint256 oldId, uint256 newId, address newLender, uint256 newRate);
+    event LoanReclaimed(uint256 id);
 
     error CollateralAmountIsZero();
     error InsufficientCollateralBalance();
@@ -58,6 +59,7 @@ interface PolyLendEE {
     error LoanIsCalled();
     error MinimumDurationHasNotPassed();
     error AuctionHasEnded();
+    error AuctionHasNotEnded();
 }
 
 /// @title PolyLend
@@ -66,18 +68,35 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
 
     /// @notice per second rate equal to roughly 1000% APY
     uint256 public constant MAX_INTEREST = InterestLib.ONE + InterestLib.ONE_THOUSAND_APY;
+
+    /// @notice duration of the auction for transferring a loan
     uint256 public constant AUCTION_DURATION = 1 days;
+
+    /// @notice buffer for payback time
     uint256 public constant PAYBACK_BUFFER = 1 minutes;
 
+    /// @notice The conditional tokens contract
     IConditionalTokens public immutable conditionalTokens;
+
+    /// @notice The USDC token contract
     ERC20 public immutable usdc;
 
+    /// @notice The next id for a loan
     uint256 public nextLoanId = 0;
+
+    /// @notice The next id for a request
     uint256 public nextRequestId = 0;
+
+    /// @notice The next id for an offer
     uint256 public nextOfferId = 0;
 
+    /// @notice loans mapping
     mapping(uint256 => Loan) public loans;
+
+    /// @notice requests mapping
     mapping(uint256 => Request) public requests;
+
+    /// @notice offers mapping
     mapping(uint256 => Offer) public offers;
 
     constructor(address _conditionalTokens, address _usdc) {
@@ -85,14 +104,22 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         usdc = ERC20(_usdc);
     }
 
+    /// @notice Get the amount owed on a loan
+    /// @param _loanId The id of the loan
+    /// @param _paybackTime The time at which the loan will be paid back
+    /// @return The amount owed on the loan
     function getAmountOwed(uint256 _loanId, uint256 _paybackTime) public view returns (uint256) {
         uint256 loanDuration = _paybackTime - loans[_loanId].startTime;
         return _calculateAmountOwed(loans[_loanId].loanAmount, loans[_loanId].rate, loanDuration);
     }
 
+    /*//////////////////////////////////////////////////////////////
+                                REQUEST
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Submit a request for loan offers
     function request(uint256 _positionId, uint256 _collateralAmount, uint256 _minimumDuration)
-        public
+        external
         returns (uint256)
     {
         if (_collateralAmount == 0) {
@@ -125,8 +152,12 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         requests[_requestId].borrower = address(0);
     }
 
+    /*//////////////////////////////////////////////////////////////
+                                 OFFER
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Submit a loan offer for a request
-    function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate) public returns (uint256) {
+    function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate) external returns (uint256) {
         if (requests[_requestId].borrower == address(0)) {
             revert InvalidRequest();
         }
@@ -162,8 +193,12 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         offers[_id].lender = address(0);
     }
 
+    /*//////////////////////////////////////////////////////////////
+                                 ACCEPT
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Accept a loan offer
-    function accept(uint256 _offerId) public returns (uint256) {
+    function accept(uint256 _offerId) external returns (uint256) {
         uint256 requestId = offers[_offerId].requestId;
         address borrower = requests[requestId].borrower;
         address lender = offers[_offerId].lender;
@@ -213,8 +248,12 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         return loanId;
     }
 
+    /*//////////////////////////////////////////////////////////////
+                                  CALL
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Call a loan
-    function call(uint256 _loanId) public {
+    function call(uint256 _loanId) external {
         if (loans[_loanId].borrower == address(0)) {
             revert InvalidLoan();
         }
@@ -236,11 +275,15 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         emit LoanCalled(_loanId, block.timestamp);
     }
 
+    /*//////////////////////////////////////////////////////////////
+                                 REPAY
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Repay a loan
     /// @notice It is possible that the the block.timestamp will differ
     /// @notice from the time that the transaction is submitted to the
     /// @notice block when it is mined.
-    function repay(uint256 _loanId, uint256 _repayTimestamp) public {
+    function repay(uint256 _loanId, uint256 _repayTimestamp) external {
         if (loans[_loanId].borrower != msg.sender) {
             revert OnlyBorrower();
         }
@@ -276,8 +319,12 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         emit LoanRepaid(_loanId);
     }
 
+    /*//////////////////////////////////////////////////////////////
+                                TRANSFER
+    //////////////////////////////////////////////////////////////*/
+
     /// @notice Transfer a called loan to a new lender
-    function transfer(uint256 _loanId, uint256 _newRate) public {
+    function transfer(uint256 _loanId, uint256 _newRate) external {
         if (loans[_loanId].borrower == address(0)) {
             revert InvalidLoan();
         }
@@ -328,6 +375,42 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
 
         emit LoanTransferred(_loanId, loanId, msg.sender, _newRate);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                                RECLAIM
+    //////////////////////////////////////////////////////////////*/
+
+    function reclaim(uint256 _loanId) external {
+        if (loans[_loanId].borrower == address(0)) {
+            revert InvalidLoan();
+        }
+
+        if (loans[_loanId].lender != msg.sender) {
+            revert OnlyLender();
+        }
+
+        if (loans[_loanId].callTime == 0) {
+            revert LoanIsNotCalled();
+        }
+
+        if (block.timestamp <= loans[_loanId].callTime + AUCTION_DURATION) {
+            revert AuctionHasNotEnded();
+        }
+
+        // transfer the borrower's collateral to the lender
+        conditionalTokens.safeTransferFrom(
+            address(this), msg.sender, loans[_loanId].positionId, loans[_loanId].collateralAmount, ""
+        );
+
+        // cancel the loan
+        loans[_loanId].borrower = address(0);
+
+        emit LoanReclaimed(_loanId);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                INTERNAL
+    //////////////////////////////////////////////////////////////*/
 
     function _calculateAmountOwed(uint256 _loanAmount, uint256 _rate, uint256 _loanDuration)
         internal
