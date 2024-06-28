@@ -44,6 +44,8 @@ contract PolyLendOfferTest is PolyLendTestHelper {
         assertEq(offer.lender, lender);
         assertEq(offer.loanAmount, _loanAmount);
         assertEq(offer.rate, rate);
+
+        assertEq(polyLend.nextOfferId(), 1);
     }
 
     function test_revert_PolyLendOfferTest_offer_InvalidRequestId(uint128 _loanAmount) public {
