@@ -1,6 +1,8 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
+/// @title InterestLib
+/// @notice A library to help calculate interest rates
 library InterestLib {
     uint256 public constant ONE = 10 ** 18;
     uint256 public constant ONE_THOUSAND_APY = 76_036_763_191;

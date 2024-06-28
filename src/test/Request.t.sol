@@ -24,6 +24,8 @@ contract PolyLendRequestTest is PolyLendTestHelper {
         assertEq(request.positionId, positionId0);
         assertEq(request.collateralAmount, _amount);
         assertEq(request.minimumDuration, _minimumDuration);
+
+        assertEq(polyLend.nextRequestId(), 1);
     }
 
     function test_revert_PolyLendRequestTest_request_CollateralAmountIsZero() public {

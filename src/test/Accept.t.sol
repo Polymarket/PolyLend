@@ -55,6 +55,8 @@ contract PolyLendAcceptTest is PolyLendTestHelper {
 
         assertEq(usdc.balanceOf(borrower), _loanAmount);
         assertEq(conditionalTokens.balanceOf(address(polyLend), positionId0), _collateralAmount);
+
+        assertEq(polyLend.nextLoanId(), 1);
     }
 
     function test_revert_PolyLendAcceptTest_accept_OnlyBorrower(

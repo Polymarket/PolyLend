@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
 import {ERC20} from "../lib/solady/src/tokens/ERC20.sol";
@@ -6,6 +6,7 @@ import {IConditionalTokens} from "./interfaces/IConditionalTokens.sol";
 import {ERC1155TokenReceiver} from "./ERC1155TokenReceiver.sol";
 import {InterestLib} from "./InterestLib.sol";
 
+/// @notice Loan struct
 struct Loan {
     address borrower;
     address lender;
@@ -18,6 +19,7 @@ struct Loan {
     uint256 callTime;
 }
 
+/// @notice Request struct
 struct Request {
     address borrower;
     uint256 positionId;
@@ -25,6 +27,7 @@ struct Request {
     uint256 minimumDuration;
 }
 
+/// @notice Offer struct
 struct Offer {
     uint256 requestId;
     address lender;
@@ -32,6 +35,8 @@ struct Offer {
     uint256 rate;
 }
 
+/// @title PolyLendEE
+/// @notice PolyLend events and errors
 interface PolyLendEE {
     event LoanAccepted(uint256 id, uint256 startTime);
     event LoanCalled(uint256 id, uint256 callTime);
@@ -63,6 +68,8 @@ interface PolyLendEE {
 }
 
 /// @title PolyLend
+/// @notice A contract for lending USDC using conditional tokens as collateral
+/// @author mike@polymarket.com
 contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     using InterestLib for uint256;
 
@@ -118,6 +125,10 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Submit a request for loan offers
+    /// @param _positionId The conditional token position id
+    /// @param _collateralAmount The amount of collateral
+    /// @param _minimumDuration The minimum duration of the loan
+    /// @return The request id
     function request(uint256 _positionId, uint256 _collateralAmount, uint256 _minimumDuration)
         external
         returns (uint256)
@@ -144,6 +155,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Cancel a loan request
+    /// @param _requestId The request id
     function cancelRequest(uint256 _requestId) public {
         if (requests[_requestId].borrower != msg.sender) {
             revert OnlyBorrower();
@@ -157,6 +169,10 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Submit a loan offer for a request
+    /// @param _requestId The request id
+    /// @param _loanAmount The usdc amount of the loan
+    /// @param _rate The interest rate of the loan
+    /// @return The offer id
     function offer(uint256 _requestId, uint256 _loanAmount, uint256 _rate) external returns (uint256) {
         if (requests[_requestId].borrower == address(0)) {
             revert InvalidRequest();
@@ -185,6 +201,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     }
 
     /// @notice Cancel a loan offer
+    /// @param _id The offer id
     function cancelOffer(uint256 _id) public {
         if (offers[_id].lender != msg.sender) {
             revert OnlyLender();
@@ -198,6 +215,8 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Accept a loan offer
+    /// @param _offerId The offer id
+    /// @return The loan id
     function accept(uint256 _offerId) external returns (uint256) {
         uint256 requestId = offers[_offerId].requestId;
         address borrower = requests[requestId].borrower;
@@ -253,6 +272,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Call a loan
+    /// @param _loanId The id of the loan
     function call(uint256 _loanId) external {
         if (loans[_loanId].borrower == address(0)) {
             revert InvalidLoan();
@@ -283,6 +303,8 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     /// @notice It is possible that the the block.timestamp will differ
     /// @notice from the time that the transaction is submitted to the
     /// @notice block when it is mined.
+    /// @param _loanId The loan id
+    /// @param _repayTimestamp The time at which the loan will be paid back
     function repay(uint256 _loanId, uint256 _repayTimestamp) external {
         if (loans[_loanId].borrower != msg.sender) {
             revert OnlyBorrower();
@@ -324,6 +346,9 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Transfer a called loan to a new lender
+    /// @notice The new lender must offer a rate less than or equal to the current rate
+    /// @param _loanId The loan id
+    /// @param _newRate The new interest rate
     function transfer(uint256 _loanId, uint256 _newRate) external {
         if (loans[_loanId].borrower == address(0)) {
             revert InvalidLoan();
@@ -380,6 +405,10 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
                                 RECLAIM
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Reclaim a called loan after the auction ends
+    /// @notice and the loan has not been transferred
+    /// @notice The lender will receive the borrower's collateral
+    /// @param _loanId The loan id
     function reclaim(uint256 _loanId) external {
         if (loans[_loanId].borrower == address(0)) {
             revert InvalidLoan();
@@ -412,6 +441,11 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
                                 INTERNAL
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Calculate the amount owed on a loan
+    /// @param _loanAmount The initial usdc amount of the loan
+    /// @param _rate The interest rate of the loan
+    /// @param _loanDuration The duration of the loan
+    /// @return The total amount owed on the loan
     function _calculateAmountOwed(uint256 _loanAmount, uint256 _rate, uint256 _loanDuration)
         internal
         pure
