@@ -426,13 +426,13 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
             revert AuctionHasNotEnded();
         }
 
+        // cancel the loan
+        loans[_loanId].borrower = address(0);
+
         // transfer the borrower's collateral to the lender
         conditionalTokens.safeTransferFrom(
             address(this), msg.sender, loans[_loanId].positionId, loans[_loanId].collateralAmount, ""
         );
-
-        // cancel the loan
-        loans[_loanId].borrower = address(0);
 
         emit LoanReclaimed(_loanId);
     }
