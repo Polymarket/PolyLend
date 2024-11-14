@@ -101,6 +101,7 @@ contract PolyLendTestHelper is Test, PolyLendEE {
     }
 
     function _getNewRate(uint256 _callTime) internal view returns (uint256) {
-        return (block.timestamp - _callTime) * polyLend.MAX_INTEREST() / polyLend.AUCTION_DURATION();
+        //return (block.timestamp - _callTime) * polyLend.MAX_INTEREST() / polyLend.AUCTION_DURATION();
+        return InterestLib.ONE + ((block.timestamp - _callTime) * (polyLend.MAX_INTEREST() - InterestLib.ONE) / polyLend.AUCTION_DURATION());
     }
 }
