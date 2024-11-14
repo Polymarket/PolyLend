@@ -246,7 +246,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
             loanAmount: loanAmount,
             rate: offers[_offerId].rate,
             startTime: block.timestamp,
-            minimumDuration: requests[_offerId].minimumDuration,
+            minimumDuration: requests[requestId].minimumDuration,
             callTime: 0
         });
 
@@ -254,7 +254,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         requests[requestId].borrower = address(0);
 
         // invalidate the offer
-        offers[requestId].lender = address(0);
+        offers[_offerId].lender = address(0);
 
         // transfer the borrowers collateral to address(this)
         conditionalTokens.safeTransferFrom(msg.sender, address(this), positionId, collateralAmount, "");
