@@ -246,7 +246,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
             loanAmount: loanAmount,
             rate: offers[_offerId].rate,
             startTime: block.timestamp,
-            minimumDuration: requests[_offerId].minimumDuration,
+            minimumDuration: requests[requestId].minimumDuration,
             callTime: 0
         });
 
@@ -254,7 +254,7 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
         requests[requestId].borrower = address(0);
 
         // invalidate the offer
-        offers[requestId].lender = address(0);
+        offers[_offerId].lender = address(0);
 
         // transfer the borrowers collateral to address(this)
         conditionalTokens.safeTransferFrom(msg.sender, address(this), positionId, collateralAmount, "");
@@ -362,7 +362,8 @@ contract PolyLend is PolyLendEE, ERC1155TokenReceiver {
             revert AuctionHasEnded();
         }
 
-        uint256 currentInterestRate = (block.timestamp - loans[_loanId].callTime) * MAX_INTEREST / AUCTION_DURATION;
+        // Fixed bug: add InterestLib.ONE to prevent interest going to 0 for early calls to transfer
+        uint256 currentInterestRate = InterestLib.ONE + ((block.timestamp - loans[_loanId].callTime) * (MAX_INTEREST - InterestLib.ONE) / AUCTION_DURATION);
 
         // _newRate must be less than or equal to the current offered rate
         if (_newRate > currentInterestRate) {
